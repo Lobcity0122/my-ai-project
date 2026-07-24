@@ -1,4 +1,6 @@
-﻿#include "framework.h"
+﻿// リポジトリ新規作成 2026.07.24
+
+#include "framework.h"
 #include "shader.h"
 
 using namespace DirectX;
