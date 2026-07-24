@@ -1,0 +1,58 @@
+#pragma once
+
+#include <d3d11.h>
+#include <wrl.h>
+#include <directxmath.h>
+#include <vector>
+#include <string>
+#include <fbxsdk.h>
+
+using namespace Microsoft::WRL;
+
+struct scene
+{
+	struct node
+	{
+		uint64_t unique_id{ 0 };
+		std::string name;
+		FbxNodeAttribute::EType attribute{ FbxNodeAttribute::EType::eUnknown };
+		int64_t praent_index{ -1 };
+	};
+
+	std::vector<node> nodes;
+	int64_t indexof(uint64_t unique_id) const
+	{
+		int64_t index{ 0 };
+		for (const node& node : nodes)
+		{
+			if (node.unique_id == unique_id)
+			{
+				return index;
+			}
+			++index;
+		}
+		return -1;
+	}
+};
+
+class skinned_mesh
+{
+public:
+	struct vertex
+	{
+		DirectX::XMFLOAT3 position;
+		DirectX::XMFLOAT3 normal{ 0,1,0 };
+		DirectX::XMFLOAT2 texcoord{ 0,0 };
+	};
+	struct constans
+	{
+		DirectX::XMFLOAT4X4 world;
+		DirectX::XMFLOAT4 material_color;
+	};
+private:
+	ComPtr<ID3D11VertexShader> vertex_shader;
+
+
+
+
+};

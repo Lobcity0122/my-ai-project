@@ -64,6 +64,9 @@
     <ClCompile Include="static_mesh.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
+    <ClCompile Include="skinned_mesh.cpp">
+      <Filter>Sources</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="framework.h">
@@ -115,6 +118,9 @@
       <Filter>Headers</Filter>
     </ClInclude>
     <ClInclude Include="static_mesh.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="skinned_mesh.h">
       <Filter>Headers</Filter>
     </ClInclude>
   </ItemGroup>
