@@ -17,9 +17,8 @@ struct scene
 		uint64_t unique_id{ 0 };
 		std::string name;
 		FbxNodeAttribute::EType attribute{ FbxNodeAttribute::EType::eUnknown };
-		int64_t praent_index{ -1 };
+		int64_t parent_index{ -1 };
 	};
-
 	std::vector<node> nodes;
 	int64_t indexof(uint64_t unique_id) const
 	{
@@ -30,6 +29,7 @@ struct scene
 			{
 				return index;
 			}
+
 			++index;
 		}
 		return -1;
@@ -42,24 +42,24 @@ public:
 	struct vertex
 	{
 		DirectX::XMFLOAT3 position;
-		DirectX::XMFLOAT3 normal{ 0,1,0 };
-		DirectX::XMFLOAT2 texcoord{ 0,0 };
+		DirectX::XMFLOAT3 normal{ 0, 1, 0 };
+		DirectX::XMFLOAT2 texcoord{ 0, 0 };
 	};
 
-	struct constans
+	struct constants
 	{
 		DirectX::XMFLOAT4X4 world;
 		DirectX::XMFLOAT4 material_color;
 	};
 
 private:
-	ComPtr<ID3D11VertexShader> vertex_shader;
-	ComPtr<ID3D11PixelShader> pixel_shader;
-	ComPtr<ID3D11InputLayout> input_layout;
-	ComPtr<ID3D11Buffer> constant_buffer;
+	Microsoft::WRL::ComPtr<ID3D11VertexShader> vertex_shader;
+	Microsoft::WRL::ComPtr<ID3D11PixelShader> pixel_shader;
+	Microsoft::WRL::ComPtr<ID3D11InputLayout> input_layout;
+	Microsoft::WRL::ComPtr<ID3D11Buffer> constant_buffer;
 
 public:
-	skinned_mesh(ID3D11Device* device, const char* fbx_filename, bool triangulate = false);
+	skinned_mesh(ID3D11Device * device, const char* fbx_filename, bool triangulate = false);
 	virtual ~skinned_mesh() = default;
 
 protected:
