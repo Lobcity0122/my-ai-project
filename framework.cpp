@@ -268,6 +268,9 @@ bool framework::initialize()
 	static_meshes[0] = make_unique<static_mesh>(device.Get(), L".\\resources\\Rock\\Rock.obj"); // cube、torus、\\Cup\\cup.obj、\\Bison\\Bison.obj、\\Mr.Incredible\\Mr.Incredible.obj
 	// \\Mr.Incredible\\Mr.Incredible.obj
 
+	// skinned_meshオブジェクトを生成する
+	skinned_meshes[0] = make_unique<skinned_mesh>(device.Get(), L".\\resources\\cube.000.fbx"); // \\cube.000.fbx
+
 	return true;
 }
 

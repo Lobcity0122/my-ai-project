@@ -29,6 +29,7 @@ using namespace ImGui;
 
 #include "geometric_primitive.h"
 #include "static_mesh.h"
+#include "skinned_mesh.h"
 
 #define SCREEN_WIDTH 1280
 #define SCREEN_HEIGHT 720
@@ -77,6 +78,9 @@ public:
 
 	// static_mesh *Œ^”z—ñ‚ğ—v‘f”8‚ÅéŒ¾
 	std::unique_ptr<static_mesh> static_meshes[8];
+
+	// sknned_mesh *Œ^”z—ñ‚ğ—v‘f”8‚ÅéŒ¾
+	std::unique_ptr<skinned_mesh> skinned_meshes[8];
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// ImGui‚ÅŠeíİ’è
