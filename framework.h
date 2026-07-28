@@ -103,8 +103,8 @@ public:
 	float src_y = 0.0f;
 
 	// [Textout用パラメータ]
-	char text_buffer[128] = "HELLO DIRECTX11";
-	DirectX::XMFLOAT2 text_pos{ 50.0f, 80.0f };
+	char text_buffer[128] = "DIRECTX11";
+	DirectX::XMFLOAT2 text_pos{ 0.0f, 0.0f };
 	DirectX::XMFLOAT2 text_size{ 32.0f, 32.0f }; // 1文字の幅と高さ
 	DirectX::XMFLOAT4 text_color{ 1.0f, 1.0f, 1.0f, 1.0f };
 
@@ -135,14 +135,20 @@ public:
 	// [static_mesh用パラメータ]
 	DirectX::XMFLOAT3 static_mesh_position{ 0.0f,0.0f,0.0f };
 
-	// 姿勢
 	DirectX::XMFLOAT3 static_mesh_rotation{ 0.0f,0.0f,0.0f };
 
-	// 寸法
 	DirectX::XMFLOAT3 static_mesh_scale{ 1.0f,1.0f,1.0f };
 
-	// 色
 	float static_mesh_color[4] = { 1.0f,1.0f,1.0f,1.0f };
+
+	// [skinned_mesh用パラメータ]
+	DirectX::XMFLOAT3 skinned_mesh_position{ 0.0f,0.0f,0.0f };
+
+	DirectX::XMFLOAT3 skinned_mesh_rotation{ 0.0f,0.0f,0.0f };
+
+	DirectX::XMFLOAT3 skinned_mesh_scale{ 1.0f,1.0f,1.0f };
+
+	float skinned_mesh_color[4] = { 1.0f,1.0f,1.0f,1.0f };
 
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	

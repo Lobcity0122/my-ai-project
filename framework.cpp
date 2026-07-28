@@ -373,7 +373,7 @@ void framework::update(float elapsed_time/*Elapsed seconds from last frame*/)
 	}
 
 	// 7. static_meshオブジェクト編集
-	if (ImGui::CollapsingHeader("Static_mesh", ImGuiTreeNodeFlags_DefaultOpen))
+	if (ImGui::CollapsingHeader("Static_mesh", 0))
 	{
 		// 位置の調整
 		ImGui::DragFloat3("mesh_Pos", &static_mesh_position.x, 0.1f);
@@ -383,6 +383,19 @@ void framework::update(float elapsed_time/*Elapsed seconds from last frame*/)
 		ImGui::SliderFloat3("mesh_Scale", &static_mesh_scale.x, 0.1f, 5.0f);
 		// 色の調整（カラーピッカー）
 		ImGui::ColorEdit4("mesh Color", static_mesh_color);
+	}
+
+	// 8. skinned_meshオブジェクト編集
+	if (ImGui::CollapsingHeader("Skinned_mesh", ImGuiTreeNodeFlags_DefaultOpen))
+	{
+		// 位置の調整
+		ImGui::DragFloat3("skinned_Pos", &skinned_mesh_position.x, 0.1f);
+		// 姿勢の調整（-180度～180度）0.5fはドラッグのスピード
+		ImGui::DragFloat3("skinned_Rota", &skinned_mesh_rotation.x, 0.5f, -180.0f, 180.0f);
+		// 寸法の調整（0.1倍～5.0倍）
+		ImGui::SliderFloat3("skinned_Scale", &skinned_mesh_scale.x, 0.1f, 5.0f);
+		// 色の調整（カラーピッカー）
+		ImGui::ColorEdit4("skinned Color", skinned_mesh_color);
 	}
 	
 	ImGui::End();
@@ -422,13 +435,13 @@ void framework::render(float elapsed_time/*Elapsed seconds from last frame*/)
 		sprite0_color.z, sprite0_color.w, 
 		sprite0_angle
 	);*/
-	sprites[1]->render(immediate_context.Get(), 
+	/*sprites[1]->render(immediate_context.Get(), 
 		position1.x, position1.y, 240, 240,
 		sprite1_color.x, sprite1_color.y, 
 		sprite1_color.z, sprite1_color.w, 
 		sprite1_angle,
 		140.0f * animationNo, src_y, 140.0f, 240.0f
-	);
+	);*/
 	
 	float x{ 0 };
 	float y{ 0 };
@@ -436,7 +449,7 @@ void framework::render(float elapsed_time/*Elapsed seconds from last frame*/)
 	if (!use_batch)
 	{
 		// 個数分ドローコールが発生して重い
-		for (int i = 0; i < sprite_draw_count; ++i)
+		/*for (int i = 0; i < sprite_draw_count; ++i)
 		{
 			sprites[1]->render(immediate_context.Get(),
 				x, static_cast<float>(static_cast<int>(y) % 720), 64, 64,
@@ -448,12 +461,12 @@ void framework::render(float elapsed_time/*Elapsed seconds from last frame*/)
 				x = 0;
 				y += 24;
 			}
-		}
+		}*/
 	}
 	else
 	{
 		// すべての頂点をまとめて1回で描くので軽量
-		sprite_batches[0]->begin(immediate_context.Get(), replaced_pixel_shaders[0].Get());
+		/*sprite_batches[0]->begin(immediate_context.Get(), replaced_pixel_shaders[0].Get());
 
 		for (int i = 0; i < sprite_draw_count; ++i)
 		{
@@ -469,7 +482,7 @@ void framework::render(float elapsed_time/*Elapsed seconds from last frame*/)
 			}
 		}
 
-		sprite_batches[0]->end(immediate_context.Get());
+		sprite_batches[0]->end(immediate_context.Get());*/
 	}
 
 	sprites[2]->textout(immediate_context.Get(), 
@@ -508,10 +521,7 @@ void framework::render(float elapsed_time/*Elapsed seconds from last frame*/)
 	// 拡大縮小（S）・回転（R）・平行移動（T）行列を計算する
 	//XMMATRIX S{ XMMatrixScaling(cube_scale.x, cube_scale.y, cube_scale.z) };
 	XMMATRIX S3{ XMMatrixScaling(static_mesh_scale.x, static_mesh_scale.y, static_mesh_scale.z) };
-
-	// 立体感を出すために、フレーム毎に角度を変化させる
-	//static float cube_angle = 0.0f;
-	//cube_angle += elapsed_time * 1.0f; // 1秒間に1ラジアン回転
+	XMMATRIX S4{ XMMatrixScaling(skinned_mesh_scale.x, skinned_mesh_scale.y, skinned_mesh_scale.z) };
 
 	// 回転は度数法からラジアンに変換して行列に渡す(ImGuiを使うため)
 	// XMMATRIX R{ XMMatrixRotationRollPitchYaw(0.0f, 0.0f, 0.0f) };
@@ -525,10 +535,16 @@ void framework::render(float elapsed_time/*Elapsed seconds from last frame*/)
 	       XMConvertToRadians(static_mesh_rotation.y), // Pitch
 	       XMConvertToRadians(static_mesh_rotation.z)  // Yaw
 	) };
+	XMMATRIX R4{ XMMatrixRotationRollPitchYaw(
+	       XMConvertToRadians(skinned_mesh_rotation.x), // Roll
+	       XMConvertToRadians(skinned_mesh_rotation.y), // Pitch
+	       XMConvertToRadians(skinned_mesh_rotation.z)  // Yaw
+	) };
 
 	//XMMATRIX T{ XMMatrixTranslation(cube_position.x, cube_position.y, cube_position.z) };
 	//XMMATRIX T2{ XMMatrixTranslation(cube_position2.x, cube_position2.y, cube_position2.z) };
 	XMMATRIX T3{ XMMatrixTranslation(static_mesh_position.x, static_mesh_position.y, static_mesh_position.z) };
+	XMMATRIX T4{ XMMatrixTranslation(skinned_mesh_position.x, skinned_mesh_position.y, skinned_mesh_position.z) };
 
 	// 上記３行列を合成しワールド変換行列を作成する
 	/*DirectX::XMFLOAT4X4 world;
@@ -537,6 +553,8 @@ void framework::render(float elapsed_time/*Elapsed seconds from last frame*/)
 	DirectX::XMStoreFloat4x4(&world2, S * R * T2);*/
 	DirectX::XMFLOAT4X4 world3;
 	DirectX::XMStoreFloat4x4(&world3, S3 * R3 * T3);
+	DirectX::XMFLOAT4X4 world4;
+	DirectX::XMStoreFloat4x4(&world4, S4* R4* T4);
 
 	// geometric_primitive クラスの render メンバ関数を呼び出す
     // ※深度テスト：オン、深度ライト：オンの深度ステンシルステートをバインドしておく
@@ -569,12 +587,12 @@ void framework::render(float elapsed_time/*Elapsed seconds from last frame*/)
 	//static_meshes[0]->render(immediate_context.Get(), world3, { static_mesh_color[0], static_mesh_color[1], static_mesh_color[2], static_mesh_color[3] });
 
 	// （第4引数に、用意したモノクロ化やモザイクなどのシェーダーオブジェクトを渡す）
-	static_meshes[0]->render(
-		immediate_context.Get(),
-		world3,
-		{ static_mesh_color[0], static_mesh_color[1], static_mesh_color[2], static_mesh_color[3] }
-		//replaced_pixel_shaders[0].Get() // 第4引数に差し替え用シェーダーを渡す
-	);
+	//static_meshes[0]->render(
+	//	immediate_context.Get(),
+	//	world3,
+	//	{ static_mesh_color[0], static_mesh_color[1], static_mesh_color[2], static_mesh_color[3] }
+	//	//replaced_pixel_shaders[0].Get() // 第4引数に差し替え用シェーダーを渡す
+	//);
 
 	// 境界ボックスの可視化（ワイヤーフレーム描画）
 	// ① メッシュクラスに作ったゲッターから最小・最大座標を取得
@@ -611,6 +629,13 @@ void framework::render(float elapsed_time/*Elapsed seconds from last frame*/)
 
 	// ⑥ 描画が終わったら、ラスタライザステートを「ソリッド（通常の塗りつぶし）」に戻す
 	immediate_context->RSSetState(rasterizer_states[0].Get());
+
+	// skinned_meshクラスのrenderメンバ関数を呼び出す
+	skinned_meshes[0]->render(
+		immediate_context.Get(), 
+		world4, 
+		{ skinned_mesh_color[0], skinned_mesh_color[1], skinned_mesh_color[2], skinned_mesh_color[3] }
+	);
 
 #ifdef USE_IMGUI
 	ImGui::Render();

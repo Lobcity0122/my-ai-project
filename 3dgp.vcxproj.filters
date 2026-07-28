@@ -134,6 +134,9 @@
     <None Include="static_mesh.hlsli">
       <Filter>Shaders</Filter>
     </None>
+    <None Include="skinned_mesh.hlsli">
+      <Filter>Shaders</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="sprite_vs.hlsl">
@@ -155,6 +158,12 @@
       <Filter>Shaders</Filter>
     </FxCompile>
     <FxCompile Include="static_mesh_ps.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="skinned_mesh_vs.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="skinned_mesh_ps.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
   </ItemGroup>
