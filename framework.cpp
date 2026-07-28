@@ -391,7 +391,7 @@ void framework::update(float elapsed_time/*Elapsed seconds from last frame*/)
 		// 位置の調整
 		ImGui::DragFloat3("skinned_Pos", &skinned_mesh_position.x, 0.1f);
 		// 姿勢の調整（-180度～180度）0.5fはドラッグのスピード
-		ImGui::DragFloat3("skinned_Rota", &skinned_mesh_rotation.x, 0.5f, -180.0f, 180.0f);
+		ImGui::DragFloat3("skinned_Rota", &skinned_mesh_rotation.x, 0.5f, -360.0f, 360.0f);
 		// 寸法の調整（0.1倍～5.0倍）
 		ImGui::SliderFloat3("skinned_Scale", &skinned_mesh_scale.x, 0.1f, 5.0f);
 		// 色の調整（カラーピッカー）
@@ -583,23 +583,15 @@ void framework::render(float elapsed_time/*Elapsed seconds from last frame*/)
 		{ cube_color[0], cube_color[1], cube_color[2], cube_color[3] }
 	);*/
 
-	// static_meshクラスのrenderメンバ関数を呼び出す	
-	//static_meshes[0]->render(immediate_context.Get(), world3, { static_mesh_color[0], static_mesh_color[1], static_mesh_color[2], static_mesh_color[3] });
-
-	// （第4引数に、用意したモノクロ化やモザイクなどのシェーダーオブジェクトを渡す）
-	//static_meshes[0]->render(
-	//	immediate_context.Get(),
-	//	world3,
-	//	{ static_mesh_color[0], static_mesh_color[1], static_mesh_color[2], static_mesh_color[3] }
-	//	//replaced_pixel_shaders[0].Get() // 第4引数に差し替え用シェーダーを渡す
-	//);
-
-	// 境界ボックスの可視化（ワイヤーフレーム描画）
-	// ① メッシュクラスに作ったゲッターから最小・最大座標を取得
+	//-----------------------------------------------------
+	// スタティックメッシュ用(境界ボックスの可視化)
+	//-----------------------------------------------------
+	
+	// ① 各クラスに作ったゲッターから最小・最大座標を取得
 	DirectX::XMFLOAT3 min_v, max_v;
 	static_meshes[0]->get_bounding_box(min_v, max_v);
 
-	// ② DirectX::XMVECTOR に変換して中心点(Center)とサイズ(Size)を計算
+	// ② XMVECTORに変換し、境界ボックスの「サイズ」と「中心座標」を計算
 	DirectX::XMVECTOR min_vec = DirectX::XMLoadFloat3(&min_v);
 	DirectX::XMVECTOR max_vec = DirectX::XMLoadFloat3(&max_v);
 
@@ -612,7 +604,7 @@ void framework::render(float elapsed_time/*Elapsed seconds from last frame*/)
 	DirectX::XMStoreFloat3(&center, center_vec);
 	DirectX::XMStoreFloat3(&size, size_vec);
 
-	// ③ 境界ボックス専用のワールド行列をビルド
+	// ③ 境界ボックス専用のワールド行列を作成
 	// 【順序】ボックス自体の拡大縮小 → ボックス自体の平行移動 → オブジェクト本来のワールド行列
 	DirectX::XMMATRIX box_scale = DirectX::XMMatrixScaling(size.x, size.y, size.z);
 	DirectX::XMMATRIX box_translation = DirectX::XMMatrixTranslation(center.x, center.y, center.z);
@@ -625,15 +617,61 @@ void framework::render(float elapsed_time/*Elapsed seconds from last frame*/)
 	immediate_context->RSSetState(rasterizer_states[1].Get());
 
 	// ⑤ geometric_primitive の正六面体(CUBE)を使って、計算した行列で箱を描画
-	geometric_primitives[0]->render(immediate_context.Get(), box_world_matrix, DirectX::XMFLOAT4(0.0f, 1.0f, 0.0f, 1.0f));
+	geometric_primitives[0]->render(immediate_context.Get(), box_world_matrix, DirectX::XMFLOAT4(0.0f, 1.0f, 0.0f, 0.5f));
 
 	// ⑥ 描画が終わったら、ラスタライザステートを「ソリッド（通常の塗りつぶし）」に戻す
 	immediate_context->RSSetState(rasterizer_states[0].Get());
 
+	// static_meshクラスのrenderメンバ関数を呼び出す	
+	//static_meshes[0]->render(immediate_context.Get(), world3, { static_mesh_color[0], static_mesh_color[1], static_mesh_color[2], static_mesh_color[3] });
+
+	// （第4引数に、用意したモノクロ化やモザイクなどのシェーダーオブジェクトを渡す）
+	static_meshes[0]->render(
+		immediate_context.Get(),
+		world3,
+		{ static_mesh_color[0], static_mesh_color[1], static_mesh_color[2], static_mesh_color[3] }
+		//replaced_pixel_shaders[0].Get() // 第4引数に差し替え用シェーダーを渡す
+	);
+
+	//-----------------------------------------------------
+	// スキンメッシュ用(境界ボックスの可視化)
+	//-----------------------------------------------------
+	
+	DirectX::XMFLOAT3 bbox_min, bbox_max;
+	skinned_meshes[0]->get_bounding_box(bbox_min, bbox_max);
+
+	DirectX::XMVECTOR bbox_min_vec = DirectX::XMLoadFloat3(&bbox_min);
+	DirectX::XMVECTOR bbox_max_vec = DirectX::XMLoadFloat3(&bbox_max);
+
+	// Center = (min + max) * 0.5
+	DirectX::XMVECTOR center_bbvec = DirectX::XMVectorScale(DirectX::XMVectorAdd(bbox_min_vec, bbox_max_vec), 0.5f);
+	// Size = max - min
+	DirectX::XMVECTOR size_bbvec = DirectX::XMVectorSubtract(bbox_max_vec, bbox_min_vec);
+	DirectX::XMFLOAT3 bbcenter, bbsize;
+	DirectX::XMStoreFloat3(&bbcenter, center_bbvec);
+	DirectX::XMStoreFloat3(&bbsize, size_bbvec);
+
+	// 境界ボックス専用のワールド行列を作成
+	DirectX::XMMATRIX bbox_scale = DirectX::XMMatrixScaling(bbsize.x, bbsize.y, bbsize.z);
+	DirectX::XMMATRIX bbox_translation = DirectX::XMMatrixTranslation(bbcenter.x, bbcenter.y, bbcenter.z);
+	DirectX::XMMATRIX bbox_object_world = DirectX::XMLoadFloat4x4(&world4);
+
+	DirectX::XMFLOAT4X4 bbox_world_matrix;
+	DirectX::XMStoreFloat4x4(&bbox_world_matrix, bbox_scale * bbox_translation * bbox_object_world);
+
+	// ラスタライザステートを「ワイヤフレーム」に切り替え
+	immediate_context->RSSetState(rasterizer_states[1].Get());
+
+	// geometric_primitive の正六面体を使って箱を描画
+	geometric_primitives[0]->render(immediate_context.Get(), bbox_world_matrix, DirectX::XMFLOAT4(0.0f, 1.0f, 0.0f, 0.5f));
+
+	// ラスタライザステートを「ソリッド」に戻す
+	immediate_context->RSSetState(rasterizer_states[0].Get());
+
 	// skinned_meshクラスのrenderメンバ関数を呼び出す
 	skinned_meshes[0]->render(
-		immediate_context.Get(), 
-		world4, 
+		immediate_context.Get(),
+		world4,
 		{ skinned_mesh_color[0], skinned_mesh_color[1], skinned_mesh_color[2], skinned_mesh_color[3] }
 	);
 

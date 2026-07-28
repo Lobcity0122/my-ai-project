@@ -1,5 +1,6 @@
 ﻿#include <sstream>
 #include <functional>
+#include <algorithm>
 #include "misc.h"
 #include "shader.h"
 #include "skinned_mesh.h"
@@ -124,6 +125,15 @@ void skinned_mesh::fetch_meshes(FbxScene* fbx_scene, std::vector<mesh>& meshes)
                vertex.position.y = static_cast<float>(control_points[polygon_vertex][1]);
                vertex.position.z = static_cast<float>(control_points[polygon_vertex][2]);
                
+			   // 読み込んだ頂点座標からバウンディングボックスの最小・最大座標を更新する
+               bounding_box_min.x = (std::min)(bounding_box_min.x, vertex.position.x);
+               bounding_box_min.y = (std::min)(bounding_box_min.y, vertex.position.y);
+               bounding_box_min.z = (std::min)(bounding_box_min.z, vertex.position.z);
+
+               bounding_box_max.x = (std::max)(bounding_box_max.x, vertex.position.x);
+               bounding_box_max.y = (std::max)(bounding_box_max.y, vertex.position.y);
+               bounding_box_max.z = (std::max)(bounding_box_max.z, vertex.position.z);
+
                if (fbx_mesh->GetElementNormalCount() > 0)
                {
                    FbxVector4 normal;

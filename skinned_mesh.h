@@ -5,6 +5,7 @@
 #include <directxmath.h>
 #include <vector>
 #include <string>
+#include <algorithm> // std::min,std::max用に追加
 #include <fbxsdk.h>
 
 using namespace Microsoft::WRL;
@@ -83,6 +84,10 @@ private:
 	Microsoft::WRL::ComPtr<ID3D11Buffer> constant_buffer;
 	friend class skinned_mesh;
 
+	// バウンディングボックス用のメンバ変数の追加
+	DirectX::XMFLOAT3 bounding_box_min{ FLT_MAX, FLT_MAX, FLT_MAX };    // 最小座標
+	DirectX::XMFLOAT3 bounding_box_max{ -FLT_MAX, -FLT_MAX, -FLT_MAX }; // 最大座標
+
 public:
 	// コンストラクタ：FBXファイルを読み込み、シーンやノードツリーを構築する
 	skinned_mesh(ID3D11Device * device, const char* fbx_filename, bool triangulate = false);
@@ -99,6 +104,13 @@ public:
 		const DirectX::XMFLOAT4X4& world, 
 		const DirectX::XMFLOAT4& material_color);
 
+	// バウンディングボックスの最小、最大座標を取得
+	void get_bounding_box(DirectX::XMFLOAT3& min_vertex, DirectX::XMFLOAT3& max_vertex) const
+	{
+		min_vertex = bounding_box_min;
+		max_vertex = bounding_box_max;
+	}
+	
 protected:
 	scene scene_view; // シーンビュー(ノード階層情報)
 };
