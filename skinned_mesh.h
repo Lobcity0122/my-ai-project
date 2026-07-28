@@ -19,7 +19,9 @@ struct scene
 		FbxNodeAttribute::EType attribute{ FbxNodeAttribute::EType::eUnknown };
 		int64_t parent_index{ -1 };
 	};
+
 	std::vector<node> nodes;
+
 	int64_t indexof(uint64_t unique_id) const
 	{
 		int64_t index{ 0 };
