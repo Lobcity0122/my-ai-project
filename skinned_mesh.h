@@ -5,7 +5,9 @@
 #include <directxmath.h>
 #include <vector>
 #include <string>
-#include <algorithm> // std::min,std::max用に追加
+#include <unordered_map> // std::unordered_map 用に追加
+#include <filesystem>    // std::filesystem 用に追加
+#include <algorithm>     // std::min,std::max用に追加
 #include <fbxsdk.h>
 
 using namespace Microsoft::WRL;
@@ -77,6 +79,22 @@ public:
 
 	std::vector<mesh> meshes; // メッシュ構造体のリスト
 
+	// マテリアル構造体の定義
+	struct material 
+	{
+		uint16_t unique_id{ 0 }; // マテリアルID
+		std::string name;          // マテリアル名
+
+		DirectX::XMFLOAT4 Ka{ 0.2f, 0.2f, 0.2f, 1.0f }; // アンビエントカラー
+		DirectX::XMFLOAT4 Kd{ 0.8f, 0.8f, 0.8f, 1.0f }; // ディフューズカラー
+		DirectX::XMFLOAT4 Ks{ 1.0f, 1.0f, 1.0f, 1.0f }; // スペキュラーカラー
+
+		std::string texture_filenames[4]; // テクスチャファイル名の配列
+		Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> shader_resource_views[4]; // テクスチャSRVの配列
+	};
+
+	std::unordered_map<uint64_t, material> materials; // マテリアルIDをキーとしたマテリアル構造体のマップ
+
 private:
 	Microsoft::WRL::ComPtr<ID3D11VertexShader> vertex_shader;
 	Microsoft::WRL::ComPtr<ID3D11PixelShader> pixel_shader;
@@ -103,6 +121,11 @@ public:
 	void render(ID3D11DeviceContext* immediate_context, 
 		const DirectX::XMFLOAT4X4& world, 
 		const DirectX::XMFLOAT4& material_color);
+
+	// マテリアル抽出関数
+	void fetch_materials(FbxScene* fbx_scene, 
+		std::unordered_map<uint64_t, material>& materials
+	);
 
 	// バウンディングボックスの最小、最大座標を取得
 	void get_bounding_box(DirectX::XMFLOAT3& min_vertex, DirectX::XMFLOAT3& max_vertex) const

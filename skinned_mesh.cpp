@@ -3,6 +3,7 @@
 #include <algorithm>
 #include "misc.h"
 #include "shader.h"
+#include "texture.h"
 #include "skinned_mesh.h"
 
 using namespace DirectX;
@@ -78,13 +79,14 @@ skinned_mesh::skinned_mesh(ID3D11Device* device, const char* fbx_filename, bool 
         OutputDebugStringA(debug_string.str().c_str());
     }
 #endif
-    traverse(fbx_scene->GetRootNode());
-
+    // マテリアル・メッシュの抽出
+    fetch_materials(fbx_scene, materials);
     fetch_meshes(fbx_scene, meshes);
 
     // 8. マネージャーを破棄することで、すべてのFBXオブジェクトを一括解放
     fbx_manager->Destroy();
 
+    // COMオブジェクト作成
     create_com_objects(device, fbx_filename);
 }
 
@@ -160,6 +162,43 @@ void skinned_mesh::fetch_meshes(FbxScene* fbx_scene, std::vector<mesh>& meshes)
     }
 }
 
+void skinned_mesh::fetch_materials(FbxScene* fbx_scene,
+    std::unordered_map<uint64_t, material>& materials)
+{
+    const size_t node_const{ scene_view.nodes.size() };
+    for (size_t node_index = 0; node_index < node_const; node_index++)
+    {
+        const scene::node& node{ scene_view.nodes.at(node_index) };
+        const FbxNode* fbx_node{ fbx_scene->FindNodeByName(node.name.c_str()) };
+
+        const int material_count{ fbx_node->GetMaterialCount() };
+        for (int material_index = 0; material_index < material_count; material_index++)
+        {
+            const FbxSurfaceMaterial* fbx_material{ fbx_node->GetMaterial(material_index) };
+
+            material material;
+            material.name = fbx_material->GetName();
+            material.unique_id = fbx_material->GetUniqueID();
+            FbxProperty fbx_property;
+            fbx_property = fbx_material->FindProperty(FbxSurfaceMaterial::sDiffuse);
+            if (fbx_property.IsValid())
+            {
+                const FbxDouble3 color{ fbx_property.Get<FbxDouble3>() };
+                material.Kd.x = static_cast<float>(color[0]);
+                material.Kd.y = static_cast<float>(color[1]);
+                material.Kd.z = static_cast<float>(color[2]);
+                material.Kd.w = 1.0f;
+            
+                const FbxFileTexture * fbx_texture{ fbx_property.GetSrcObject<FbxFileTexture>() };
+                material.texture_filenames[0] =
+                    fbx_texture ? fbx_texture->GetRelativeFileName() : "";
+            }
+            materials.emplace(material.unique_id, std::move(material));
+        }
+    }
+    materials.emplace();
+}
+
 // GPUバッファ（頂点/インデックスバッファ）生成
 void skinned_mesh::create_com_objects(ID3D11Device* device, const char* fbx_filename)
 {
@@ -211,6 +250,25 @@ void skinned_mesh::create_com_objects(ID3D11Device* device, const char* fbx_file
     buffer_desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
     hr = device->CreateBuffer(&buffer_desc, nullptr, constant_buffer.ReleaseAndGetAddressOf());
     _ASSERT_EXPR(SUCCEEDED(hr), hr_trace(hr));
+
+    // シェーダーリソースビュー生成コードを追加
+    for (std::unordered_map<uint64_t, material>::iterator iterator = materials.begin();
+        iterator != materials.end(); ++iterator)
+    {
+        if (iterator->second.texture_filenames[0].size() > 0)
+        {
+            std::filesystem::path path(fbx_filename);
+            path.replace_filename(iterator->second.texture_filenames[0]);
+            D3D11_TEXTURE2D_DESC texture2d_desc;
+            load_texture_from_file(device, path.c_str(),
+                iterator->second.shader_resource_views[0].GetAddressOf(), &texture2d_desc);
+        }
+        else
+        {
+            make_dummy_texture(device, iterator->second.shader_resource_views[0].GetAddressOf(),
+                0xFFFFFFFF, 16);
+        }
+    }
 }
 
 // 描画関数
@@ -231,12 +289,27 @@ void skinned_mesh::render(ID3D11DeviceContext* immediate_context,
         
         constants data;
         data.world = world;
-        data.material_color = material_color;
+
+        XMStoreFloat4(&data.material_color,
+            XMLoadFloat4(&material_color) * XMLoadFloat4(&materials.cbegin()->second.Kd));
+
         immediate_context->UpdateSubresource(constant_buffer.Get(), 0, 0, &data, 0, 0);
         immediate_context->VSSetConstantBuffers(0, 1, constant_buffer.GetAddressOf());
-        
+
+        // シェーダーリソースビューのバインド
+        immediate_context->PSSetShaderResources(0, 1, materials.cbegin()->second.shader_resource_views[0].GetAddressOf());
+
         D3D11_BUFFER_DESC buffer_desc;
         mesh.index_buffer->GetDesc(&buffer_desc);
         immediate_context->DrawIndexed(buffer_desc.ByteWidth / sizeof(uint32_t), 0, 0);
+
+        /*data.material_color = material_color;
+        immediate_context->UpdateSubresource(constant_buffer.Get(), 0, 0, &data, 0, 0);
+        immediate_context->VSSetConstantBuffers(0, 1, constant_buffer.GetAddressOf());
+        immediate_context->PSSetShaderResources(0, 1, materials.cbegin()->second.shader_resource_views[0].GetAddressOf());
+
+        D3D11_BUFFER_DESC buffer_desc;
+        mesh.index_buffer->GetDesc(&buffer_desc);
+        immediate_context->DrawIndexed(buffer_desc.ByteWidth / sizeof(uint32_t), 0, 0);*/
     }
 }
