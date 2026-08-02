@@ -107,16 +107,54 @@ void skinned_mesh::fetch_meshes(FbxScene* fbx_scene, std::vector<mesh>& meshes)
         mesh.unique_id = fbx_node->GetUniqueID();
         mesh.name = fbx_node->GetName();
         mesh.node_index = scene_view.indexof(mesh.unique_id);
+
+		// メッシュのサブセット情報を抽出する
+        std::vector<mesh::subset>& subsets{ mesh.subsets };
+        const int material_count{ fbx_mesh->GetNode()->GetMaterialCount() };
+        subsets.resize(material_count > 0 ? material_count : 1);
+        for (int material_index = 0; material_index < material_count; ++material_index)
+        {
+            const FbxSurfaceMaterial * fbx_material{ fbx_mesh->GetNode()->GetMaterial(material_index) };
+            subsets.at(material_index).material_name = fbx_material->GetName();
+            subsets.at(material_index).material_unique_id = fbx_material->GetUniqueID();
+        }
+
+		// マテリアルが存在する場合、各サブセットのインデックス数を計算する
+        if (material_count > 0)
+        {
+            const int polygon_count{ fbx_mesh->GetPolygonCount() };
+            for (int polygon_index = 0; polygon_index < polygon_count; ++polygon_index)
+            {
+                const int material_index{ fbx_mesh->GetElementMaterial()->GetIndexArray().GetAt(polygon_index) };
+                subsets.at(material_index).index_count += 3;
+            }
+            uint32_t offset{ 0 };
+            for (mesh::subset& subset : subsets)
+            {
+                subset.start_index_location = offset;
+                offset += subset.index_count;
+                // This will be used as counter in the following procedures, reset to zero 
+                subset.index_count = 0; // 次の計算用にリセット
+            }
+        }
         
         const int polygon_count{ fbx_mesh->GetPolygonCount() };
         mesh.vertices.resize(polygon_count * 3LL);
         mesh.indices.resize(polygon_count * 3LL);
         
+		// 頂点座標のバウンディングボックスを計算するための初期値を設定
         FbxStringList uv_names;
         fbx_mesh->GetUVSetNames(uv_names);
         const FbxVector4 * control_points{ fbx_mesh->GetControlPoints() };
         for (int polygon_index = 0; polygon_index < polygon_count; ++polygon_index)
         {
+			// マテリアルが存在する場合、各ポリゴンのマテリアルインデックスを取得し、対応するサブセットにインデックスを追加
+            const int material_index{ material_count > 0 ?
+               fbx_mesh->GetElementMaterial()->GetIndexArray().GetAt(polygon_index) : 0 };
+            //mesh::subset & subset{ subsets.at(material_index) };
+            auto& subset{ subsets.at(material_index) };
+            const uint32_t offset{ subset.start_index_location + subset.index_count };
+
            for (int position_in_polygon = 0; position_in_polygon < 3; ++position_in_polygon)
            {
                const int vertex_index{ polygon_index * 3 + position_in_polygon };
@@ -156,12 +194,14 @@ void skinned_mesh::fetch_meshes(FbxScene* fbx_scene, std::vector<mesh>& meshes)
                }
 
                mesh.vertices.at(vertex_index) = std::move(vertex);
-               mesh.indices.at(vertex_index) = vertex_index;
+               mesh.indices.at(static_cast<size_t>(offset) + position_in_polygon) = vertex_index;
+			   subset.index_count++;
            }
         }
     }
 }
 
+// FBXシーンからマテリアル情報を抽出する関数
 void skinned_mesh::fetch_materials(FbxScene* fbx_scene,
     std::unordered_map<uint64_t, material>& materials)
 {
@@ -275,6 +315,7 @@ void skinned_mesh::create_com_objects(ID3D11Device* device, const char* fbx_file
 void skinned_mesh::render(ID3D11DeviceContext* immediate_context,
     const XMFLOAT4X4& world, const XMFLOAT4& material_color)
 {
+	// メッシュごとに描画する
     for (const mesh& mesh : meshes)
     {
         uint32_t stride{ sizeof(vertex) };
@@ -290,18 +331,16 @@ void skinned_mesh::render(ID3D11DeviceContext* immediate_context,
         constants data;
         data.world = world;
 
-        XMStoreFloat4(&data.material_color,
-            XMLoadFloat4(&material_color) * XMLoadFloat4(&materials.cbegin()->second.Kd));
-
-        immediate_context->UpdateSubresource(constant_buffer.Get(), 0, 0, &data, 0, 0);
-        immediate_context->VSSetConstantBuffers(0, 1, constant_buffer.GetAddressOf());
-
-        // シェーダーリソースビューのバインド
-        immediate_context->PSSetShaderResources(0, 1, materials.cbegin()->second.shader_resource_views[0].GetAddressOf());
-
-        D3D11_BUFFER_DESC buffer_desc;
-        mesh.index_buffer->GetDesc(&buffer_desc);
-        immediate_context->DrawIndexed(buffer_desc.ByteWidth / sizeof(uint32_t), 0, 0);
+		// サブセットごとに描画する
+        for (const mesh::subset& subset : mesh.subsets)
+        {
+            const material & material{ materials.at(subset.material_unique_id) };
+            XMStoreFloat4(&data.material_color, XMLoadFloat4(&material_color) * XMLoadFloat4(&material.Kd));
+            immediate_context->UpdateSubresource(constant_buffer.Get(), 0, 0, &data, 0, 0);
+            immediate_context->VSSetConstantBuffers(0, 1, constant_buffer.GetAddressOf());
+            immediate_context->PSSetShaderResources(0, 1, material.shader_resource_views[0].GetAddressOf());
+            immediate_context->DrawIndexed(subset.index_count, subset.start_index_location, 0);
+        }
 
         /*data.material_color = material_color;
         immediate_context->UpdateSubresource(constant_buffer.Get(), 0, 0, &data, 0, 0);

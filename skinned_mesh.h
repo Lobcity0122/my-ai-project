@@ -75,6 +75,18 @@ public:
 
 		std::vector<vertex> vertices;
 		std::vector<uint32_t> indices;
+
+		// メッシュのサブセット構造体の定義
+		struct subset
+		{
+			uint64_t material_unique_id{ 0 }; // マテリアルID
+			std::string material_name;        // マテリアル名
+
+			uint32_t start_index_location{ 0 }; // インデックスバッファ内の開始位置
+			uint32_t index_count{ 0 };        // インデックス数
+		};
+
+		std::vector<subset> subsets; // サブセット構造体のリスト
 	};
 
 	std::vector<mesh> meshes; // メッシュ構造体のリスト
