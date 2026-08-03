@@ -8,6 +8,41 @@
 
 using namespace DirectX;
 
+// FBX SDKのFbxAMatrixをDirectXMathのXMFLOAT4X4に変換する関数
+inline XMFLOAT4X4 to_xmfloat4x4(const FbxAMatrix& fbxamatrix)
+{
+	XMFLOAT4X4 xmfloat4x4;
+    for (int row = 0; row < 4; row++)
+    {
+        for (int column = 0; column < 4; column++)
+        {
+            xmfloat4x4.m[row][column] = static_cast<float>(fbxamatrix[row][column]);
+        }
+    }
+    return xmfloat4x4;
+}
+
+// FBX SDKのFbxDouble3をDirectXMathのXMFLOAT3に変換する関数
+inline XMFLOAT3 to_xmfloat3(const FbxDouble3& fbxdouble3)
+{
+    XMFLOAT3 xmfloat3;
+    xmfloat3.x = static_cast<float>(fbxdouble3[0]);
+    xmfloat3.y = static_cast<float>(fbxdouble3[1]);
+    xmfloat3.z = static_cast<float>(fbxdouble3[2]);
+    return xmfloat3;
+}
+
+// FBX SDKのFbxDouble4をDirectXMathのXMFLOAT4に変換する関数
+inline XMFLOAT4 to_xmfloat4(const FbxDouble4& fbxdouble4)
+{
+    XMFLOAT4 xmfloat4;
+    xmfloat4.x = static_cast<float>(fbxdouble4[0]);
+    xmfloat4.y = static_cast<float>(fbxdouble4[1]);
+    xmfloat4.z = static_cast<float>(fbxdouble4[2]);
+    xmfloat4.w = static_cast<float>(fbxdouble4[3]);
+    return xmfloat4;
+}
+
 // コンストラクタ：FBXファイルのインポートとノードツリー走査
 skinned_mesh::skinned_mesh(ID3D11Device* device, const char* fbx_filename, bool triangulate)
 {
@@ -108,6 +143,9 @@ void skinned_mesh::fetch_meshes(FbxScene* fbx_scene, std::vector<mesh>& meshes)
         mesh.name = fbx_node->GetName();
         mesh.node_index = scene_view.indexof(mesh.unique_id);
 
+		// メッシュのデフォルトのグローバルトランスフォームを取得
+		mesh.default_global_transform = to_xmfloat4x4(fbx_node->EvaluateGlobalTransform());
+
 		// メッシュのサブセット情報を抽出する
         std::vector<mesh::subset>& subsets{ mesh.subsets };
         const int material_count{ fbx_mesh->GetNode()->GetMaterialCount() };
@@ -155,7 +193,7 @@ void skinned_mesh::fetch_meshes(FbxScene* fbx_scene, std::vector<mesh>& meshes)
             auto& subset{ subsets.at(material_index) };
             const uint32_t offset{ subset.start_index_location + subset.index_count };
 
-           for (int position_in_polygon = 0; position_in_polygon < 3; ++position_in_polygon)
+           for (int position_in_polygon = 0; position_in_polygon < 3; position_in_polygon++)
            {
                const int vertex_index{ polygon_index * 3 + position_in_polygon };
 
@@ -328,8 +366,9 @@ void skinned_mesh::render(ID3D11DeviceContext* immediate_context,
         immediate_context->VSSetShader(vertex_shader.Get(), nullptr, 0);
         immediate_context->PSSetShader(pixel_shader.Get(), nullptr, 0);
         
+		// 定数バッファにワールド行列とマテリアルカラーを設定
         constants data;
-        data.world = world;
+        XMStoreFloat4x4(&data.world, XMLoadFloat4x4(&mesh.default_global_transform) * XMLoadFloat4x4(&world));
 
 		// サブセットごとに描画する
         for (const mesh::subset& subset : mesh.subsets)

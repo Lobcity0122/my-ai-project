@@ -87,6 +87,14 @@ public:
 		};
 
 		std::vector<subset> subsets; // サブセット構造体のリスト
+
+		DirectX::XMFLOAT4X4 default_global_transform
+		{ 
+			1, 0, 0, 0, 0,
+			1, 0, 0, 0, 0, 
+			1, 0, 0, 0, 0,
+			1 
+		}; // デフォルトのグローバルトランスフォーム
 	};
 
 	std::vector<mesh> meshes; // メッシュ構造体のリスト

@@ -170,7 +170,7 @@ bool framework::initialize()
 	D3D11_RASTERIZER_DESC rasterizer_desc{};
 	rasterizer_desc.FillMode = D3D11_FILL_SOLID;
 	rasterizer_desc.CullMode = D3D11_CULL_BACK;
-	rasterizer_desc.FrontCounterClockwise = FALSE;
+	rasterizer_desc.FrontCounterClockwise = TRUE;
 	rasterizer_desc.DepthBias = 0;
 	rasterizer_desc.DepthBiasClamp = 0;
 	rasterizer_desc.SlopeScaledDepthBias = 0;
@@ -181,22 +181,32 @@ bool framework::initialize()
 	hr = device->CreateRasterizerState(&rasterizer_desc, rasterizer_states[0].GetAddressOf());
 	_ASSERT_EXPR(SUCCEEDED(hr), hr_trace(hr));
 
+	// 1:ワイヤーフレーム描画（表面のみ描画）
 	rasterizer_desc.FillMode = D3D11_FILL_WIREFRAME;
 	rasterizer_desc.CullMode = D3D11_CULL_BACK;
 	rasterizer_desc.AntialiasedLineEnable = TRUE;
 	hr = device->CreateRasterizerState(&rasterizer_desc, rasterizer_states[1].GetAddressOf());
 	_ASSERT_EXPR(SUCCEEDED(hr), hr_trace(hr));
 
+	// 3:ワイヤーフレーム描画（裏面は描画しない）
 	rasterizer_desc.FillMode = D3D11_FILL_WIREFRAME;
 	rasterizer_desc.CullMode = D3D11_CULL_NONE;
 	rasterizer_desc.AntialiasedLineEnable = TRUE;
 	hr = device->CreateRasterizerState(&rasterizer_desc, rasterizer_states[2].GetAddressOf());
 	_ASSERT_EXPR(SUCCEEDED(hr), hr_trace(hr));
 
+	// 4:ワイヤーフレーム描画（裏面も描画）
 	rasterizer_desc.FillMode = D3D11_FILL_SOLID;
 	rasterizer_desc.CullMode = D3D11_CULL_NONE;
 	rasterizer_desc.AntialiasedLineEnable = TRUE;
 	hr = device->CreateRasterizerState(&rasterizer_desc, rasterizer_states[3].GetAddressOf());
+	_ASSERT_EXPR(SUCCEEDED(hr), hr_trace(hr));
+
+	// 5:通常の描画
+	rasterizer_desc.FillMode = D3D11_FILL_SOLID;
+	rasterizer_desc.CullMode = D3D11_CULL_BACK;
+	rasterizer_desc.FrontCounterClockwise = FALSE;
+	hr = device->CreateRasterizerState(&rasterizer_desc, rasterizer_states[4].GetAddressOf());
 	_ASSERT_EXPR(SUCCEEDED(hr), hr_trace(hr));
 
 	// ビューポートの設定
@@ -267,7 +277,7 @@ bool framework::initialize()
 	// \\Mr.Incredible\\Mr.Incredible.obj
 
 	// skinned_meshオブジェクトを生成する
-	skinned_meshes[0] = make_unique<skinned_mesh>(device.Get(), ".\\resources\\cube.002.0.fbx"); // \\cube.000.fbx
+	skinned_meshes[0] = make_unique<skinned_mesh>(device.Get(), ".\\resources\\cube.003.1.fbx",true); // \\cube.000.fbx
 
 	return true;
 }
@@ -426,7 +436,7 @@ void framework::render(float elapsed_time/*Elapsed seconds from last frame*/)
 	immediate_context->OMSetBlendState(blend_states[Blend_index].Get(), nullptr, 0xFFFFFFFF);
 
 	// ラスタライザステートの切り替え(2D)
-	immediate_context->RSSetState(rasterizer_states[0].Get());
+	immediate_context->RSSetState(rasterizer_states[5].Get());
 
 	// renderメンバ関数でのspriteオブジェクトの描画方法を変更する
 	/*sprites[0]->render(immediate_context.Get(), 
@@ -518,6 +528,45 @@ void framework::render(float elapsed_time/*Elapsed seconds from last frame*/)
 	immediate_context->VSSetConstantBuffers(1, 1, constant_buffers[0].GetAddressOf());
 	immediate_context->PSSetConstantBuffers(1, 1, constant_buffers[0].GetAddressOf());
 
+	// 座標系変換行列の配列を定義する
+	const DirectX::XMFLOAT4X4 coordinate_system_transforms[]
+	{
+		{
+		    -1,0,0,0,0,
+		     1,0,0,0,0,
+		     1,0,0,0,0,
+		     1
+		}, // 左手座標系（DirectXのデフォルト）
+
+		{
+			 1,0,0,0,0,
+			 1,0,0,0,0,
+			 1,0,0,0,0,
+			 1
+		}, // 右手座標系（OpenGLのデフォルト）
+
+		{
+			-1,0,0,0,0,
+			 0,-1,0,0,1,
+			 0,0,0,0,0,
+			 1
+		}, // 左手座標系（DirectXのデフォルト）＋Y軸反転
+
+		{
+			 1,0,0,0,0,
+			 0,1,0,0,1,
+			 0,0,0,0,0,
+			 1
+		}, // 右手座標系（OpenGLのデフォルト）＋Y軸反転
+	};
+
+	// To change the units from centimeters to meters, set 'scale_factor' to 0.01.
+	const float scale_factor = 1.0f;
+	DirectX::XMMATRIX C{
+	    DirectX::XMLoadFloat4x4(&coordinate_system_transforms[2])
+		* DirectX::XMMatrixScaling(scale_factor, scale_factor, scale_factor) 
+	};
+
 	// 拡大縮小（S）・回転（R）・平行移動（T）行列を計算する
 	//XMMATRIX S{ XMMatrixScaling(cube_scale.x, cube_scale.y, cube_scale.z) };
 	XMMATRIX S3{ XMMatrixScaling(static_mesh_scale.x, static_mesh_scale.y, static_mesh_scale.z) };
@@ -554,7 +603,7 @@ void framework::render(float elapsed_time/*Elapsed seconds from last frame*/)
 	DirectX::XMFLOAT4X4 world3;
 	DirectX::XMStoreFloat4x4(&world3, S3 * R3 * T3);
 	DirectX::XMFLOAT4X4 world4;
-	DirectX::XMStoreFloat4x4(&world4, S4* R4* T4);
+	DirectX::XMStoreFloat4x4(&world4, C* S4* R4* T4);
 
 	// geometric_primitive クラスの render メンバ関数を呼び出す
     // ※深度テスト：オン、深度ライト：オンの深度ステンシルステートをバインドしておく

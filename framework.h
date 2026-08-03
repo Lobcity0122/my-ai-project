@@ -74,7 +74,7 @@ public:
 
 	// ワイヤーフレーム用
 	// 0:ソリッド・裏面カリング
-	ComPtr<ID3D11RasterizerState> rasterizer_states[4];
+	ComPtr<ID3D11RasterizerState> rasterizer_states[5];
 
 	// static_mesh *型配列を要素数8で宣言
 	std::unique_ptr<static_mesh> static_meshes[8];
