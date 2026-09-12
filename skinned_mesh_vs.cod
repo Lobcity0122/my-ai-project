@@ -38,6 +38,8 @@
 // POSITION                 0   xyzw        0     NONE   float   xyzw
 // NORMAL                   0   xyzw        1     NONE   float   xyz 
 // TEXCOORD                 0   xy          2     NONE   float   xy  
+// WEIGHTS                  0   xyzw        3     NONE   float       
+// BONES                    0   xyzw        4     NONE    uint       
 //
 //
 // Output signature:
@@ -68,6 +70,8 @@ dcl_temps 5
 //   v0.x <- vin.position.x; v0.y <- vin.position.y; v0.z <- vin.position.z; v0.w <- vin.position.w; 
 //   v1.x <- vin.normal.x; v1.y <- vin.normal.y; v1.z <- vin.normal.z; v1.w <- vin.normal.w; 
 //   v2.x <- vin.texcoord.x; v2.y <- vin.texcoord.y; 
+//   v3.x <- vin.bone_weights.x; v3.y <- vin.bone_weights.y; v3.z <- vin.bone_weights.z; v3.w <- vin.bone_weights.w; 
+//   v4.x <- vin.bone_indices.x; v4.y <- vin.bone_indices.y; v4.z <- vin.bone_indices.z; v4.w <- vin.bone_indices.w; 
 //   o4.x <- <main return value>.color.x; o4.y <- <main return value>.color.y; o4.z <- <main return value>.color.z; o4.w <- <main return value>.color.w; 
 //   o3.x <- <main return value>.texcoord.x; o3.y <- <main return value>.texcoord.y; 
 //   o2.x <- <main return value>.world_normal.x; o2.y <- <main return value>.world_normal.y; o2.z <- <main return value>.world_normal.z; o2.w <- <main return value>.world_normal.w; 
@@ -138,10 +142,10 @@ mul r2.xyzw, r2.xyzw, r3.xxxx  // r2.x <- vout.world_normal.x; r2.y <- vout.worl
 #line 9
 mov r3.xy, v2.xyxx  // r3.x <- vout.texcoord.x; r3.y <- vout.texcoord.y
 
-#line 10
+#line 12
 mov r4.xyzw, cb0[4].xyzw  // r4.x <- vout.color.x; r4.y <- vout.color.y; r4.z <- vout.color.z; r4.w <- vout.color.w
 
-#line 11
+#line 28
 mov o0.xyzw, r0.xyzw
 mov o1.xyzw, r1.xyzw
 mov o2.xyzw, r2.xyzw

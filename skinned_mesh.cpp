@@ -8,6 +8,45 @@
 
 using namespace DirectX;
 
+struct bone_influence
+{
+	uint32_t bone_index;
+	float bone_weight;
+};
+using bone_influences_per_control_point = std::vector<bone_influence>;
+
+void fetch_bone_influences(const FbxMesh* fbx_mesh,
+	std::vector<bone_influences_per_control_point>& bone_influences)
+{
+	const int control_points_count{ fbx_mesh->GetControlPointsCount() };
+	bone_influences.resize(control_points_count);
+
+	const int skin_count{ fbx_mesh->GetDeformerCount(FbxDeformer::eSkin) };
+	for (int skin_index = 0; skin_index < skin_count; ++skin_index)
+	{
+		const FbxSkin* fbx_skin
+		{ static_cast<FbxSkin*>(fbx_mesh->GetDeformer(skin_index, FbxDeformer::eSkin)) };
+
+		const int cluster_count{ fbx_skin->GetClusterCount() };
+		for (int cluster_index = 0; cluster_index < cluster_count; ++cluster_index)
+		{
+			const FbxCluster* fbx_cluster{ fbx_skin->GetCluster(cluster_index) };
+
+			const int control_point_indices_count{ fbx_cluster->GetControlPointIndicesCount() };
+			for (int control_point_indices_index = 0; control_point_indices_index < control_point_indices_count;
+				++control_point_indices_index)
+			{
+				int control_point_index{ fbx_cluster->GetControlPointIndices()[control_point_indices_index] };
+				double control_point_weight
+				{ fbx_cluster->GetControlPointWeights()[control_point_indices_index] };
+				bone_influence& bone_influence{ bone_influences.at(control_point_index).emplace_back() };
+				bone_influence.bone_index = static_cast<uint32_t>(cluster_index);
+				bone_influence.bone_weight = static_cast<float>(control_point_weight);
+			}
+		}
+	}
+}
+
 // FBX SDKのFbxAMatrixをDirectXMathのXMFLOAT4X4に変換する関数
 inline XMFLOAT4X4 to_xmfloat4x4(const FbxAMatrix& fbxamatrix)
 {
@@ -146,6 +185,9 @@ void skinned_mesh::fetch_meshes(FbxScene* fbx_scene, std::vector<mesh>& meshes)
 		// メッシュのデフォルトのグローバルトランスフォームを取得
 		mesh.default_global_transform = to_xmfloat4x4(fbx_node->EvaluateGlobalTransform());
 
+		std::vector<bone_influences_per_control_point> bone_influences;
+		fetch_bone_influences(fbx_mesh, bone_influences);
+
 		// メッシュのサブセット情報を抽出する
         std::vector<mesh::subset>& subsets{ mesh.subsets };
         const int material_count{ fbx_mesh->GetNode()->GetMaterialCount() };
@@ -229,6 +271,33 @@ void skinned_mesh::fetch_meshes(FbxScene* fbx_scene, std::vector<mesh>& meshes)
                        uv_names[0], uv, unmapped_uv);
                    vertex.texcoord.x = static_cast<float>(uv[0]);
                    vertex.texcoord.y = 1.0f - static_cast<float>(uv[1]);
+               }
+
+               const bone_influences_per_control_point& influences_per_control_point
+               { bone_influences.at(polygon_vertex) };
+               std::vector<bone_influence> sorted_influences{ influences_per_control_point };
+               std::sort(sorted_influences.begin(), sorted_influences.end(),
+                   [](const bone_influence& left, const bone_influence& right)
+                   {
+                       return left.bone_weight > right.bone_weight;
+                   });
+
+               const size_t influence_count{ (std::min)(sorted_influences.size(),
+                   static_cast<size_t>(MAX_BONE_INFLUENCES)) };
+               float total_weight{ 0.0f };
+               for (size_t influence_index = 0; influence_index < influence_count; ++influence_index)
+               {
+                   vertex.bone_weights[influence_index] = sorted_influences.at(influence_index).bone_weight;
+                   vertex.bone_indices[influence_index] = sorted_influences.at(influence_index).bone_index;
+                   total_weight += vertex.bone_weights[influence_index];
+               }
+
+               if (total_weight > 0.0f)
+               {
+                   for (size_t influence_index = 0; influence_index < influence_count; ++influence_index)
+                   {
+                       vertex.bone_weights[influence_index] /= total_weight;
+                   }
                }
 
                mesh.vertices.at(vertex_index) = std::move(vertex);
@@ -317,6 +386,8 @@ void skinned_mesh::create_com_objects(ID3D11Device* device, const char* fbx_file
         { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT },
         { "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT },
         { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT },
+        { "WEIGHTS", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT },
+        { "BONES", 0, DXGI_FORMAT_R32G32B32A32_UINT, 0, D3D11_APPEND_ALIGNED_ELEMENT },
     };
     create_vs_from_cso(device, "skinned_mesh_vs.cso", vertex_shader.ReleaseAndGetAddressOf(),
         input_layout.ReleaseAndGetAddressOf(), input_element_desc, ARRAYSIZE(input_element_desc));

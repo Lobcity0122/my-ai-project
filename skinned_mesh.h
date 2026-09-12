@@ -47,12 +47,16 @@ struct scene
 class skinned_mesh
 {
 public:
+	static const int MAX_BONE_INFLUENCES{ 4 };
+
 	// 頂点データ構造体(位置、法線、テクスチャ座標)
 	struct vertex
 	{
 		DirectX::XMFLOAT3 position;                     // 頂点座標
 		DirectX::XMFLOAT3 normal{ 0, 1, 0 };            // 法線ベクトル
 		DirectX::XMFLOAT2 texcoord{ 0, 0 };             // UV座標
+		float bone_weights[MAX_BONE_INFLUENCES]{ 1, 0, 0, 0 };
+		uint32_t bone_indices[MAX_BONE_INFLUENCES]{};
 	};
 
 	// 定数バッファ用構造体(ワールド行列やマテリアルカラー等)

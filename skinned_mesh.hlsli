@@ -3,6 +3,8 @@ struct VS_IN
     float4 position : POSITION;
     float4 normal : NORMAL;
     float2 texcoord : TEXCOORD;
+    float4 bone_weights : WEIGHTS;
+    uint4 bone_indices : BONES;
 };
 
 struct VS_OUT

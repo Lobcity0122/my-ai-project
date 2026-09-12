@@ -277,7 +277,7 @@ bool framework::initialize()
 	// \\Mr.Incredible\\Mr.Incredible.obj
 
 	// skinned_meshオブジェクトを生成する
-	skinned_meshes[0] = make_unique<skinned_mesh>(device.Get(), ".\\resources\\cube.003.1.fbx",true); // \\cube.000.fbx
+	skinned_meshes[0] = make_unique<skinned_mesh>(device.Get(), ".\\resources\\cube.004.fbx", true); // \\cube.000.fbx
 
 	return true;
 }
@@ -426,6 +426,8 @@ void framework::render(float elapsed_time/*Elapsed seconds from last frame*/)
 	// framework クラスの render メンバ関数でサンプラーステートオブジェクトをバインドする
 	// ImGuiで選択された番号(sampler_index)のサンプラーを、スロット0にバインドする
 	immediate_context->PSSetSamplers(0, 1, sampler_states[Sampler_index].GetAddressOf());
+	// skinned_mesh_ps.hlsl は sampler_states[2]（スロット2）を参照する
+	immediate_context->PSSetSamplers(2, 1, sampler_states[Sampler_index].GetAddressOf());
 
 	// ここからゲームの背景の描画(つまり2Dの描画)を行っている
 	// なので2Dの深度の設定を行う
