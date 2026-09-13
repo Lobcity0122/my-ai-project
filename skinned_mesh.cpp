@@ -15,6 +15,7 @@ struct bone_influence
 };
 using bone_influences_per_control_point = std::vector<bone_influence>;
 
+// FBX SDKのFbxMeshからボーンの影響情報を取得する関数
 void fetch_bone_influences(const FbxMesh* fbx_mesh,
 	std::vector<bone_influences_per_control_point>& bone_influences)
 {
@@ -59,6 +60,46 @@ inline XMFLOAT4X4 to_xmfloat4x4(const FbxAMatrix& fbxamatrix)
         }
     }
     return xmfloat4x4;
+}
+
+// FBX SDKのFbxAMatrixをDirectXMathのXMMATRIXに変換する関数
+void skinned_mesh::fetch_skeleton(FbxMesh* fbx_mesh, skeleton& bind_pose)
+{
+	const int deformer_count = fbx_mesh->GetDeformerCount(FbxDeformer::eSkin);
+	for (int deformer_index = 0; deformer_index < deformer_count; ++deformer_index)
+	{
+		FbxSkin* skin = static_cast<FbxSkin*>(fbx_mesh->GetDeformer(deformer_index, FbxDeformer::eSkin));
+		const int cluster_count = skin->GetClusterCount();
+		bind_pose.bones.resize(cluster_count);
+		for (int cluster_index = 0; cluster_index < cluster_count; ++cluster_index)
+		{
+			FbxCluster* cluster = skin->GetCluster(cluster_index);
+
+			skeleton::bone& bone{ bind_pose.bones.at(cluster_index) };
+			bone.name = cluster->GetLink()->GetName();
+			bone.unique_id = cluster->GetLink()->GetUniqueID();
+			bone.parent_index = bind_pose.indexof(cluster->GetLink()->GetParent()->GetUniqueID());
+			bone.node_index = scene_view.indexof(bone.unique_id);
+
+			// 'reference_global_init_position' is used to convert from local space of model(mesh) to
+			// global space of scene.
+			FbxAMatrix reference_global_init_position;
+			cluster->GetTransformMatrix(reference_global_init_position);
+
+			// 'cluster_global_init_position' is used to convert from local space of bone to
+			// global space of scene.
+			FbxAMatrix cluster_global_init_position;
+			cluster->GetTransformLinkMatrix(cluster_global_init_position);
+
+			// Matrices are defined using the Column Major scheme. When a FbxAMatrix represents a transformation
+			// (translation, rotation and scale), the last row of the matrix represents the translation part of
+			// the transformation.
+			// Compose 'bone.offset_transform' matrix that transforms position from mesh space to bone space.
+			// This matrix is called the offset matrix.
+			bone.offset_transform
+				= to_xmfloat4x4(cluster_global_init_position.Inverse() * reference_global_init_position);
+		}
+	}
 }
 
 // FBX SDKのFbxDouble3をDirectXMathのXMFLOAT3に変換する関数
@@ -187,6 +228,7 @@ void skinned_mesh::fetch_meshes(FbxScene* fbx_scene, std::vector<mesh>& meshes)
 
 		std::vector<bone_influences_per_control_point> bone_influences;
 		fetch_bone_influences(fbx_mesh, bone_influences);
+		fetch_skeleton(fbx_mesh, mesh.bind_pose);
 
 		// メッシュのサブセット情報を抽出する
         std::vector<mesh::subset>& subsets{ mesh.subsets };
@@ -442,9 +484,24 @@ void skinned_mesh::render(ID3D11DeviceContext* immediate_context,
         XMStoreFloat4x4(&data.world, XMLoadFloat4x4(&mesh.default_global_transform) * XMLoadFloat4x4(&world));
 
 #if 0
-        XMStoreFloat4x4(&data.bone_transforms[0], XMMatrixIdentity());
-        XMStoreFloat4x4(&data.bone_transforms[1], XMMatrixRotationRollPitchYaw(0, 0, XMConvertToRadians(+45)));
-        XMStoreFloat4x4(&data.bone_transforms[2], XMMatrixRotationRollPitchYaw(0, 0, XMConvertToRadians(-45)));
+        // Bind pose transform(Offset matrix) : Convert from the model(mesh) space to the bone space
+        XMMATRIX B[3];
+        B[0] = XMLoadFloat4x4(&mesh.bind_pose.bones.at(0).offset_transform);
+        B[1] = XMLoadFloat4x4(&mesh.bind_pose.bones.at(1).offset_transform);
+        B[2] = XMLoadFloat4x4(&mesh.bind_pose.bones.at(2).offset_transform);
+
+        // Animation bone transform : Convert from the bone space to the model(mesh) or the parent bone space
+        XMMATRIX A[3];
+        // from A0 space to model space
+        A[0] = XMMatrixRotationRollPitchYaw(XMConvertToRadians(90), 0, 0);
+        // from A1 space to parent bone(A0) space
+        A[1] = XMMatrixRotationRollPitchYaw(0, 0, XMConvertToRadians(45)) * XMMatrixTranslation(0, 2, 0);
+        // from A2 space to parent bone(A1) space
+        A[2] = XMMatrixRotationRollPitchYaw(0, 0, XMConvertToRadians(-45)) * XMMatrixTranslation(0, 2, 0);
+
+        XMStoreFloat4x4(&data.bone_transforms[0], B[0] * A[0]);
+        XMStoreFloat4x4(&data.bone_transforms[1], B[1] * A[1] * A[0]);
+        XMStoreFloat4x4(&data.bone_transforms[2], B[2] * A[2] * A[1] * A[0]);
 #endif
 
 		// サブセットごとに描画する

@@ -43,6 +43,38 @@ struct scene
 	}
 };
 
+struct skeleton
+{
+	struct bone
+	{
+		uint64_t unique_id{ 0 };
+		std::string name;
+		// 'parent_index' is index that refers to the parent bone's position in the array that contains itself.
+		int64_t parent_index{ -1 }; // -1 : the bone is orphan
+		// 'node_index' is an index that refers to the node array of the scene.
+		int64_t node_index{ 0 };
+
+		// 'offset_transform' is used to convert from model(mesh) space to bone(node) scene.
+		DirectX::XMFLOAT4X4 offset_transform{ 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 };
+
+		bool is_orphan() const { return parent_index < 0; }
+	};
+	std::vector<bone> bones;
+	int64_t indexof(uint64_t unique_id) const
+	{
+		int64_t index{ 0 };
+		for (const bone& bone : bones)
+		{
+			if (bone.unique_id == unique_id)
+			{
+				return index;
+			}
+			++index;
+		}
+		return -1;
+	}
+};
+
 // スキンメッシュ(3Dキャラクター等)を管理、描画するクラス
 class skinned_mesh
 {
@@ -75,6 +107,8 @@ public:
 		std::string name;
 		// 'node_index' is an index that refers to the node array of the scene.
 		int64_t node_index{ 0 };
+
+		skeleton bind_pose;
 
 		Microsoft::WRL::ComPtr<ID3D11Buffer> vertex_buffer;
 		Microsoft::WRL::ComPtr<ID3D11Buffer> index_buffer;
@@ -139,6 +173,8 @@ public:
 
 	// FBXからメッシュ（頂点・インデックス）抽出
 	void fetch_meshes(FbxScene* fbx_scene, std::vector<mesh>& meshes);
+
+	void fetch_skeleton(FbxMesh* fbx_mesh, skeleton& bind_pose);
 
 	// GPUバッファ（頂点/インデックスバッファ）生成
 	void create_com_objects(ID3D11Device* device,const char* fbx_filename);
