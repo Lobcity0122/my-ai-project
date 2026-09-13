@@ -75,6 +75,23 @@ struct skeleton
 	}
 };
 
+struct animation
+{
+	std::string name;
+	float sampling_rate{ 0 };
+
+	struct keyframe
+	{
+		struct node
+		{
+			// 'global_transform' is used to convert from local space of node to global space of scene.
+			DirectX::XMFLOAT4X4 global_transform{ 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 };
+		};
+		std::vector<node> nodes;
+	};
+	std::vector<keyframe> sequence;
+};
+
 // スキンメッシュ(3Dキャラクター等)を管理、描画するクラス
 class skinned_mesh
 {
@@ -139,6 +156,8 @@ public:
 
 	std::vector<mesh> meshes; // メッシュ構造体のリスト
 
+	std::vector<animation> animation_clips;
+
 	// マテリアル構造体の定義
 	struct material 
 	{
@@ -168,7 +187,7 @@ private:
 
 public:
 	// コンストラクタ：FBXファイルを読み込み、シーンやノードツリーを構築する
-	skinned_mesh(ID3D11Device * device, const char* fbx_filename, bool triangulate = false);
+	skinned_mesh(ID3D11Device * device, const char* fbx_filename, bool triangulate = false, float sampling_rate = 0);
 	virtual ~skinned_mesh() = default;
 
 	// FBXからメッシュ（頂点・インデックス）抽出
@@ -176,13 +195,17 @@ public:
 
 	void fetch_skeleton(FbxMesh* fbx_mesh, skeleton& bind_pose);
 
+	void fetch_animations(FbxScene* fbx_scene, std::vector<animation>& animation_clips,
+		float sampling_rate /*If this value is 0, the animation data will be sampled at the default frame rate.*/);
+
 	// GPUバッファ（頂点/インデックスバッファ）生成
 	void create_com_objects(ID3D11Device* device,const char* fbx_filename);
 
 	// メッシュを描画する
 	void render(ID3D11DeviceContext* immediate_context, 
 		const DirectX::XMFLOAT4X4& world, 
-		const DirectX::XMFLOAT4& material_color);
+		const DirectX::XMFLOAT4& material_color,
+		const animation::keyframe* keyframe);
 
 	// マテリアル抽出関数
 	void fetch_materials(FbxScene* fbx_scene, 

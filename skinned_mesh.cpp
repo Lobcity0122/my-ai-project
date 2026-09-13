@@ -1,4 +1,4 @@
-﻿#include <sstream>
+#include <sstream>
 #include <functional>
 #include <algorithm>
 #include "misc.h"
@@ -102,6 +102,56 @@ void skinned_mesh::fetch_skeleton(FbxMesh* fbx_mesh, skeleton& bind_pose)
 	}
 }
 
+// FBX SDKのFbxSceneからアニメーションデータを取得する関数
+void skinned_mesh::fetch_animations(FbxScene* fbx_scene, std::vector<animation>& animation_clips,
+	float sampling_rate /*If this value is 0, the animation data will be sampled at the default frame rate.*/)
+{
+	FbxArray<FbxString*> animation_stack_names;
+	fbx_scene->FillAnimStackNameArray(animation_stack_names);
+	const int animation_stack_count{ animation_stack_names.GetCount() };
+	for (int animation_stack_index = 0; animation_stack_index < animation_stack_count; ++animation_stack_index)
+	{
+		animation& animation_clip{ animation_clips.emplace_back() };
+		animation_clip.name = animation_stack_names[animation_stack_index]->Buffer();
+
+		FbxAnimStack* animation_stack{ fbx_scene->FindMember<FbxAnimStack>(animation_clip.name.c_str()) };
+		fbx_scene->SetCurrentAnimationStack(animation_stack);
+
+		const FbxTime::EMode time_mode{ fbx_scene->GetGlobalSettings().GetTimeMode() };
+		FbxTime one_second;
+		one_second.SetTime(0, 0, 1, 0, 0, time_mode);
+		animation_clip.sampling_rate = sampling_rate > 0 ?
+			sampling_rate : static_cast<float>(one_second.GetFrameRate(time_mode));
+		const FbxTime sampling_interval
+		{ static_cast<FbxLongLong>(one_second.Get() / animation_clip.sampling_rate) };
+		const FbxTakeInfo* take_info{ fbx_scene->GetTakeInfo(animation_clip.name.c_str()) };
+		const FbxTime start_time{ take_info->mLocalTimeSpan.GetStart() };
+		const FbxTime stop_time{ take_info->mLocalTimeSpan.GetStop() };
+		for (FbxTime time = start_time; time < stop_time; time += sampling_interval)
+		{
+			animation::keyframe& keyframe{ animation_clip.sequence.emplace_back() };
+
+			const size_t node_count{ scene_view.nodes.size() };
+			keyframe.nodes.resize(node_count);
+			for (size_t node_index = 0; node_index < node_count; ++node_index)
+			{
+				FbxNode* fbx_node{ fbx_scene->FindNodeByName(scene_view.nodes.at(node_index).name.c_str()) };
+				if (fbx_node)
+				{
+					animation::keyframe::node& node{ keyframe.nodes.at(node_index) };
+					// 'global_transform' is a transformation matrix of a node with respect to
+					// the scene's global coordinate system.
+					node.global_transform = to_xmfloat4x4(fbx_node->EvaluateGlobalTransform(time));
+				}
+			}
+		}
+	}
+	for (int animation_stack_index = 0; animation_stack_index < animation_stack_count; ++animation_stack_index)
+	{
+		delete animation_stack_names[animation_stack_index];
+	}
+}
+
 // FBX SDKのFbxDouble3をDirectXMathのXMFLOAT3に変換する関数
 inline XMFLOAT3 to_xmfloat3(const FbxDouble3& fbxdouble3)
 {
@@ -124,7 +174,7 @@ inline XMFLOAT4 to_xmfloat4(const FbxDouble4& fbxdouble4)
 }
 
 // コンストラクタ：FBXファイルのインポートとノードツリー走査
-skinned_mesh::skinned_mesh(ID3D11Device* device, const char* fbx_filename, bool triangulate)
+skinned_mesh::skinned_mesh(ID3D11Device* device, const char* fbx_filename, bool triangulate, float sampling_rate)
 {
     // 1. FBX SDK全体の管理マネージャーを作成
     FbxManager* fbx_manager{ FbxManager::Create() };
@@ -197,6 +247,8 @@ skinned_mesh::skinned_mesh(ID3D11Device* device, const char* fbx_filename, bool 
     // マテリアル・メッシュの抽出
     fetch_materials(fbx_scene, materials);
     fetch_meshes(fbx_scene, meshes);
+
+    fetch_animations(fbx_scene, animation_clips, sampling_rate);
 
     // 8. マネージャーを破棄することで、すべてのFBXオブジェクトを一括解放
     fbx_manager->Destroy();
@@ -464,7 +516,8 @@ void skinned_mesh::create_com_objects(ID3D11Device* device, const char* fbx_file
 
 // 描画関数
 void skinned_mesh::render(ID3D11DeviceContext* immediate_context,
-    const XMFLOAT4X4& world, const XMFLOAT4& material_color)
+    const XMFLOAT4X4& world, const XMFLOAT4& material_color,
+    const animation::keyframe* keyframe)
 {
 	// メッシュごとに描画する
     for (const mesh& mesh : meshes)
@@ -483,26 +536,17 @@ void skinned_mesh::render(ID3D11DeviceContext* immediate_context,
         constants data;
         XMStoreFloat4x4(&data.world, XMLoadFloat4x4(&mesh.default_global_transform) * XMLoadFloat4x4(&world));
 
-#if 0
-        // Bind pose transform(Offset matrix) : Convert from the model(mesh) space to the bone space
-        XMMATRIX B[3];
-        B[0] = XMLoadFloat4x4(&mesh.bind_pose.bones.at(0).offset_transform);
-        B[1] = XMLoadFloat4x4(&mesh.bind_pose.bones.at(1).offset_transform);
-        B[2] = XMLoadFloat4x4(&mesh.bind_pose.bones.at(2).offset_transform);
-
-        // Animation bone transform : Convert from the bone space to the model(mesh) or the parent bone space
-        XMMATRIX A[3];
-        // from A0 space to model space
-        A[0] = XMMatrixRotationRollPitchYaw(XMConvertToRadians(90), 0, 0);
-        // from A1 space to parent bone(A0) space
-        A[1] = XMMatrixRotationRollPitchYaw(0, 0, XMConvertToRadians(45)) * XMMatrixTranslation(0, 2, 0);
-        // from A2 space to parent bone(A1) space
-        A[2] = XMMatrixRotationRollPitchYaw(0, 0, XMConvertToRadians(-45)) * XMMatrixTranslation(0, 2, 0);
-
-        XMStoreFloat4x4(&data.bone_transforms[0], B[0] * A[0]);
-        XMStoreFloat4x4(&data.bone_transforms[1], B[1] * A[1] * A[0]);
-        XMStoreFloat4x4(&data.bone_transforms[2], B[2] * A[2] * A[1] * A[0]);
-#endif
+        const size_t bone_count{ mesh.bind_pose.bones.size() };
+        for (int bone_index = 0; bone_index < bone_count; ++bone_index)
+        {
+            const skeleton::bone& bone{ mesh.bind_pose.bones.at(bone_index) };
+            const animation::keyframe::node& bone_node{ keyframe->nodes.at(bone.node_index) };
+            XMStoreFloat4x4(&data.bone_transforms[bone_index],
+                XMLoadFloat4x4(&bone.offset_transform) *
+                XMLoadFloat4x4(&bone_node.global_transform) *
+                XMMatrixInverse(nullptr, XMLoadFloat4x4(&mesh.default_global_transform))
+            );
+        }
 
 		// サブセットごとに描画する
         for (const mesh::subset& subset : mesh.subsets)

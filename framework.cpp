@@ -277,7 +277,7 @@ bool framework::initialize()
 	// \\Mr.Incredible\\Mr.Incredible.obj
 
 	// skinned_meshオブジェクトを生成する
-	skinned_meshes[0] = make_unique<skinned_mesh>(device.Get(), ".\\resources\\cube.004.fbx", true); // \\cube.000.fbx
+	skinned_meshes[0] = make_unique<skinned_mesh>(device.Get(), ".\\resources\\plantune.fbx", false, 60.0f); // \\cube.000.fbx
 
 	return true;
 }
@@ -510,8 +510,20 @@ void framework::render(float elapsed_time/*Elapsed seconds from last frame*/)
 	UINT num_viewports{ 1 };
 	immediate_context->RSGetViewports(&num_viewports, &viewport);
 
+	DirectX::XMFLOAT3 bbox_min, bbox_max;
+	skinned_meshes[0]->get_bounding_box(bbox_min, bbox_max);
+	const DirectX::XMVECTOR bbox_size
+	{
+		DirectX::XMVectorSubtract(DirectX::XMLoadFloat3(&bbox_max), DirectX::XMLoadFloat3(&bbox_min))
+	};
+	const float model_radius{ DirectX::XMVectorGetX(DirectX::XMVector3Length(bbox_size)) * 0.5f };
+	const float camera_distance{ DirectX::XMVectorGetX(DirectX::XMVector3Length(
+		DirectX::XMVectorSet(camera_position.x, camera_position.y, camera_position.z, 0.0f))) };
+	const float required_far_plane{ model_radius * 2.0f + camera_distance };
+	const float far_plane{ required_far_plane > 100.0f ? required_far_plane : 100.0f };
+
 	float aspect_ratio{ viewport.Width / viewport.Height };
-	XMMATRIX P{ XMMatrixPerspectiveFovLH(XMConvertToRadians(30), aspect_ratio, 0.1f, 100.0f) };
+	XMMATRIX P{ XMMatrixPerspectiveFovLH(XMConvertToRadians(30), aspect_ratio, 0.1f, far_plane) };
 
 	// ImGuiの変数からカメラ位置を設定する
 	XMVECTOR eye{ XMVectorSet(camera_position.x, camera_position.y, camera_position.z, 1.0f) };
@@ -562,11 +574,11 @@ void framework::render(float elapsed_time/*Elapsed seconds from last frame*/)
 		}, // 右手座標系（OpenGLのデフォルト）＋Y軸反転
 	};
 
-	// To change the units from centimeters to meters, set 'scale_factor' to 0.01.
-	const float scale_factor = 1.0f;
+	// plantune.fbx はセンチメートル単位なので、描画時にメートル単位へ変換する。
+	const float scale_factor = 0.01f;
 	DirectX::XMMATRIX C{
-	    DirectX::XMLoadFloat4x4(&coordinate_system_transforms[2])
-		* DirectX::XMMatrixScaling(scale_factor, scale_factor, scale_factor) 
+		DirectX::XMLoadFloat4x4(&coordinate_system_transforms[0])
+		* DirectX::XMMatrixScaling(scale_factor, scale_factor, scale_factor)
 	};
 
 	// 拡大縮小（S）・回転（R）・平行移動（T）行列を計算する
@@ -634,6 +646,7 @@ void framework::render(float elapsed_time/*Elapsed seconds from last frame*/)
 		{ cube_color[0], cube_color[1], cube_color[2], cube_color[3] }
 	);*/
 
+	#if 0 // 境界ボックスのデバッグ表示
 	//-----------------------------------------------------
 	// スタティックメッシュ用(境界ボックスの可視化)
 	//-----------------------------------------------------
@@ -688,9 +701,6 @@ void framework::render(float elapsed_time/*Elapsed seconds from last frame*/)
 	// スキンメッシュ用(境界ボックスの可視化)
 	//-----------------------------------------------------
 	
-	DirectX::XMFLOAT3 bbox_min, bbox_max;
-	skinned_meshes[0]->get_bounding_box(bbox_min, bbox_max);
-
 	DirectX::XMVECTOR bbox_min_vec = DirectX::XMLoadFloat3(&bbox_min);
 	DirectX::XMVECTOR bbox_max_vec = DirectX::XMLoadFloat3(&bbox_max);
 
@@ -718,12 +728,30 @@ void framework::render(float elapsed_time/*Elapsed seconds from last frame*/)
 
 	// ラスタライザステートを「ソリッド」に戻す
 	immediate_context->RSSetState(rasterizer_states[0].Get());
+	#endif
 
 	// skinned_meshクラスのrenderメンバ関数を呼び出す
+	int clip_index{ 0 };
+	int frame_index{ 0 };
+	static float animation_tick{ 0 };
+
+	animation& animation{ skinned_meshes[0]->animation_clips.at(clip_index) };
+	frame_index = static_cast<int>(animation_tick * animation.sampling_rate);
+	if (frame_index > animation.sequence.size() - 1)
+	{
+		frame_index = 0;
+		animation_tick = 0;
+	}
+	else
+	{
+		animation_tick += elapsed_time;
+	}
+	animation::keyframe& keyframe{ animation.sequence.at(frame_index) };
 	skinned_meshes[0]->render(
 		immediate_context.Get(),
 		world4,
-		{ skinned_mesh_color[0], skinned_mesh_color[1], skinned_mesh_color[2], skinned_mesh_color[3] }
+		{ skinned_mesh_color[0], skinned_mesh_color[1], skinned_mesh_color[2], skinned_mesh_color[3] },
+		&keyframe
 	);
 
 #ifdef USE_IMGUI
