@@ -441,6 +441,12 @@ void skinned_mesh::render(ID3D11DeviceContext* immediate_context,
         constants data;
         XMStoreFloat4x4(&data.world, XMLoadFloat4x4(&mesh.default_global_transform) * XMLoadFloat4x4(&world));
 
+#if 0
+        XMStoreFloat4x4(&data.bone_transforms[0], XMMatrixIdentity());
+        XMStoreFloat4x4(&data.bone_transforms[1], XMMatrixRotationRollPitchYaw(0, 0, XMConvertToRadians(+45)));
+        XMStoreFloat4x4(&data.bone_transforms[2], XMMatrixRotationRollPitchYaw(0, 0, XMConvertToRadians(-45)));
+#endif
+
 		// サブセットごとに描画する
         for (const mesh::subset& subset : mesh.subsets)
         {

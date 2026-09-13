@@ -9,6 +9,7 @@
 //
 //   row_major float4x4 world;          // Offset:    0 Size:    64
 //   float4 material_color;             // Offset:   64 Size:    16
+//   row_major float4x4 bone_transforms[256];// Offset:   80 Size: 16384
 //
 // }
 //
@@ -38,8 +39,8 @@
 // POSITION                 0   xyzw        0     NONE   float   xyzw
 // NORMAL                   0   xyzw        1     NONE   float   xyz 
 // TEXCOORD                 0   xy          2     NONE   float   xy  
-// WEIGHTS                  0   xyzw        3     NONE   float       
-// BONES                    0   xyzw        4     NONE    uint       
+// WEIGHTS                  0   xyzw        3     NONE   float   xyzw
+// BONES                    0   xyzw        4     NONE    uint   xyzw
 //
 //
 // Output signature:
@@ -54,17 +55,27 @@
 //
 vs_5_0
 dcl_globalFlags refactoringAllowed | skipOptimization
-dcl_constantbuffer CB0[5], immediateIndexed
+dcl_immediateConstantBuffer { { 1.000000, 0, 0, 0},
+                              { 0, 1.000000, 0, 0},
+                              { 0, 0, 1.000000, 0},
+                              { 0, 0, 0, 1.000000},
+                              { -1, 0, 0, 0},
+                              { 0, -1, 0, 0},
+                              { 0, 0, -1, 0},
+                              { 0, 0, 0, -1} }
+dcl_constantbuffer CB0[1029], dynamicIndexed
 dcl_constantbuffer CB1[4], immediateIndexed
 dcl_input v0.xyzw
 dcl_input v1.xyz
 dcl_input v2.xy
+dcl_input v3.xyzw
+dcl_input v4.xyzw
 dcl_output_siv o0.xyzw, position
 dcl_output o1.xyzw
 dcl_output o2.xyzw
 dcl_output o3.xy
 dcl_output o4.xyzw
-dcl_temps 5
+dcl_temps 8
 //
 // Initial variable locations:
 //   v0.x <- vin.position.x; v0.y <- vin.position.y; v0.z <- vin.position.z; v0.w <- vin.position.w; 
@@ -78,78 +89,137 @@ dcl_temps 5
 //   o1.x <- <main return value>.world_position.x; o1.y <- <main return value>.world_position.y; o1.z <- <main return value>.world_position.z; o1.w <- <main return value>.world_position.w; 
 //   o0.x <- <main return value>.position.x; o0.y <- <main return value>.position.y; o0.z <- <main return value>.position.z; o0.w <- <main return value>.position.w
 //
-#line 5 "C:\Users\2250198\OneDrive - yamaguchigakuen\チEクトップ\x3dgp.00\skinned_mesh_vs.hlsl"
-mul r0.xyzw, cb0[0].xxxx, cb1[0].xyzw
-mul r1.xyzw, cb0[0].yyyy, cb1[1].xyzw
-add r0.xyzw, r0.xyzw, r1.xyzw
-mul r1.xyzw, cb0[0].zzzz, cb1[2].xyzw
-add r0.xyzw, r0.xyzw, r1.xyzw
-mul r1.xyzw, cb0[0].wwww, cb1[3].xyzw
-add r0.xyzw, r0.xyzw, r1.xyzw
-mul r1.xyzw, cb0[1].xxxx, cb1[0].xyzw
-mul r2.xyzw, cb0[1].yyyy, cb1[1].xyzw
-add r1.xyzw, r1.xyzw, r2.xyzw
-mul r2.xyzw, cb0[1].zzzz, cb1[2].xyzw
-add r1.xyzw, r1.xyzw, r2.xyzw
-mul r2.xyzw, cb0[1].wwww, cb1[3].xyzw
-add r1.xyzw, r1.xyzw, r2.xyzw
-mul r2.xyzw, cb0[2].xxxx, cb1[0].xyzw
-mul r3.xyzw, cb0[2].yyyy, cb1[1].xyzw
-add r2.xyzw, r2.xyzw, r3.xyzw
-mul r3.xyzw, cb0[2].zzzz, cb1[2].xyzw
-add r2.xyzw, r2.xyzw, r3.xyzw
-mul r3.xyzw, cb0[2].wwww, cb1[3].xyzw
-add r2.xyzw, r2.xyzw, r3.xyzw
-mul r3.xyzw, cb0[3].xxxx, cb1[0].xyzw
-mul r4.xyzw, cb0[3].yyyy, cb1[1].xyzw
-add r3.xyzw, r3.xyzw, r4.xyzw
-mul r4.xyzw, cb0[3].zzzz, cb1[2].xyzw
-add r3.xyzw, r3.xyzw, r4.xyzw
-mul r4.xyzw, cb0[3].wwww, cb1[3].xyzw
-add r3.xyzw, r3.xyzw, r4.xyzw
-mul r0.xyzw, r0.xyzw, v0.xxxx
-mul r1.xyzw, r1.xyzw, v0.yyyy
-add r0.xyzw, r0.xyzw, r1.xyzw
-mul r1.xyzw, r2.xyzw, v0.zzzz
-add r0.xyzw, r0.xyzw, r1.xyzw
-mul r1.xyzw, r3.xyzw, v0.wwww
-add r0.xyzw, r0.xyzw, r1.xyzw  // r0.x <- vout.position.x; r0.y <- vout.position.y; r0.z <- vout.position.z; r0.w <- vout.position.w
+#line 4 "C:\Users\2250198\OneDrive - yamaguchigakuen\チEクトップ\x3dgp.00\skinned_mesh_vs.hlsl"
+itof r0.x, l(0)  // r0.x <- vin.normal.w
+
+#line 5
+itof r0.yzw, l(0, 0, 0, 0)  // r0.y <- blended_position.x; r0.z <- blended_position.y; r0.w <- blended_position.z
 
 #line 6
-mul r1.xyzw, v0.xxxx, cb0[0].xyzw
-mul r2.xyzw, v0.yyyy, cb0[1].xyzw
-add r1.xyzw, r1.xyzw, r2.xyzw
-mul r2.xyzw, v0.zzzz, cb0[2].xyzw
-add r1.xyzw, r1.xyzw, r2.xyzw
-mul r2.xyzw, v0.wwww, cb0[3].xyzw
-add r1.xyzw, r1.xyzw, r2.xyzw  // r1.x <- vout.world_position.x; r1.y <- vout.world_position.y; r1.z <- vout.world_position.z; r1.w <- vout.world_position.w
+itof r1.xyz, l(0, 0, 0, 0)  // r1.x <- blended_normal.x; r1.y <- blended_normal.y; r1.z <- blended_normal.z
 
 #line 7
-itof r2.x, l(0)  // r2.x <- vin.normal.w
+mov r1.w, l(0)  // r1.w <- bone_index
+mov r2.xyz, r0.yzwy  // r2.x <- blended_position.x; r2.y <- blended_position.y; r2.z <- blended_position.z
+mov r3.xyz, r1.xyzx  // r3.x <- blended_normal.x; r3.y <- blended_normal.y; r3.z <- blended_normal.z
+mov r2.w, r1.w  // r2.w <- bone_index
+loop 
+  ilt r4.x, r2.w, l(4)
+  breakc_z r4.x
 
-#line 8
-mul r3.xyzw, v1.xxxx, cb0[0].xyzw
-mul r4.xyzw, v1.yyyy, cb0[1].xyzw
-add r3.xyzw, r3.xyzw, r4.xyzw
-mul r4.xyzw, v1.zzzz, cb0[2].xyzw
-add r3.xyzw, r3.xyzw, r4.xyzw
-mul r2.xyzw, r2.xxxx, cb0[3].xyzw
+#line 9
+  dp4 r4.x, v3.xyzw, icb[r2.w + 0].xyzw
+  and r5.xyzw, v4.xyzw, icb[r2.w + 4].xyzw
+  or r4.yz, r5.yywy, r5.xxzx
+  or r4.y, r4.z, r4.y
+  imul null, r4.y, r4.y, l(4)
+  mul r5.xyz, v0.xxxx, cb0[r4.y + 5].xyzx
+  mul r6.xyz, v0.yyyy, cb0[r4.y + 6].xyzx
+  add r5.xyz, r5.xyzx, r6.xyzx
+  mul r6.xyz, v0.zzzz, cb0[r4.y + 7].xyzx
+  add r5.xyz, r5.xyzx, r6.xyzx
+  mul r4.yzw, v0.wwww, cb0[r4.y + 8].xxyz
+  add r4.yzw, r4.yyzw, r5.xxyz
+  mul r4.xyz, r4.yzwy, r4.xxxx
+  add r2.xyz, r2.xyzx, r4.xyzx
+
+#line 11
+  dp4 r4.x, v3.xyzw, icb[r2.w + 0].xyzw
+  and r5.xyzw, v4.xyzw, icb[r2.w + 4].xyzw
+  or r4.yz, r5.yywy, r5.xxzx
+  or r4.y, r4.z, r4.y
+  imul null, r4.y, r4.y, l(4)
+  mul r5.xyz, v1.xxxx, cb0[r4.y + 5].xyzx
+  mul r6.xyz, v1.yyyy, cb0[r4.y + 6].xyzx
+  add r5.xyz, r5.xyzx, r6.xyzx
+  mul r6.xyz, v1.zzzz, cb0[r4.y + 7].xyzx
+  add r5.xyz, r5.xyzx, r6.xyzx
+  mul r4.yzw, r0.xxxx, cb0[r4.y + 8].xxyz
+  add r4.yzw, r4.yyzw, r5.xxyz
+  mul r4.xyz, r4.yzwy, r4.xxxx
+  add r3.xyz, r3.xyzx, r4.xyzx
+
+#line 13
+  iadd r2.w, r2.w, l(1)
+endloop 
+
+#line 14
+mov r2.xyz, r2.xyzx  // r2.x <- vin.position.x; r2.y <- vin.position.y; r2.z <- vin.position.z
+mov r0.x, l(1.000000)  // r0.x <- vin.position.w
+
+#line 15
+mov r3.w, l(0)
+mov r3.xyzw, r3.xyzw  // r3.x <- vin.normal.x; r3.y <- vin.normal.y; r3.z <- vin.normal.z; r3.w <- vin.normal.w
+
+#line 18
+mul r1.xyzw, cb0[0].xxxx, cb1[0].xyzw
+mul r4.xyzw, cb0[0].yyyy, cb1[1].xyzw
+add r1.xyzw, r1.xyzw, r4.xyzw
+mul r4.xyzw, cb0[0].zzzz, cb1[2].xyzw
+add r1.xyzw, r1.xyzw, r4.xyzw
+mul r4.xyzw, cb0[0].wwww, cb1[3].xyzw
+add r1.xyzw, r1.xyzw, r4.xyzw
+mul r4.xyzw, cb0[1].xxxx, cb1[0].xyzw
+mul r5.xyzw, cb0[1].yyyy, cb1[1].xyzw
+add r4.xyzw, r4.xyzw, r5.xyzw
+mul r5.xyzw, cb0[1].zzzz, cb1[2].xyzw
+add r4.xyzw, r4.xyzw, r5.xyzw
+mul r5.xyzw, cb0[1].wwww, cb1[3].xyzw
+add r4.xyzw, r4.xyzw, r5.xyzw
+mul r5.xyzw, cb0[2].xxxx, cb1[0].xyzw
+mul r6.xyzw, cb0[2].yyyy, cb1[1].xyzw
+add r5.xyzw, r5.xyzw, r6.xyzw
+mul r6.xyzw, cb0[2].zzzz, cb1[2].xyzw
+add r5.xyzw, r5.xyzw, r6.xyzw
+mul r6.xyzw, cb0[2].wwww, cb1[3].xyzw
+add r5.xyzw, r5.xyzw, r6.xyzw
+mul r6.xyzw, cb0[3].xxxx, cb1[0].xyzw
+mul r7.xyzw, cb0[3].yyyy, cb1[1].xyzw
+add r6.xyzw, r6.xyzw, r7.xyzw
+mul r7.xyzw, cb0[3].zzzz, cb1[2].xyzw
+add r6.xyzw, r6.xyzw, r7.xyzw
+mul r7.xyzw, cb0[3].wwww, cb1[3].xyzw
+add r6.xyzw, r6.xyzw, r7.xyzw
+mul r1.xyzw, r1.xyzw, r2.xxxx
+mul r4.xyzw, r2.yyyy, r4.xyzw
+add r1.xyzw, r1.xyzw, r4.xyzw
+mul r4.xyzw, r2.zzzz, r5.xyzw
+add r1.xyzw, r1.xyzw, r4.xyzw
+mul r4.xyzw, r0.xxxx, r6.xyzw
+add r1.xyzw, r1.xyzw, r4.xyzw  // r1.x <- vout.position.x; r1.y <- vout.position.y; r1.z <- vout.position.z; r1.w <- vout.position.w
+
+#line 19
+mul r4.xyzw, r2.xxxx, cb0[0].xyzw
+mul r5.xyzw, r2.yyyy, cb0[1].xyzw
+add r4.xyzw, r4.xyzw, r5.xyzw
+mul r2.xyzw, r2.zzzz, cb0[2].xyzw
+add r2.xyzw, r2.xyzw, r4.xyzw
+mul r0.xyzw, r0.xxxx, cb0[3].xyzw
+add r0.xyzw, r0.xyzw, r2.xyzw  // r0.x <- vout.world_position.x; r0.y <- vout.world_position.y; r0.z <- vout.world_position.z; r0.w <- vout.world_position.w
+
+#line 20
+mul r2.xyzw, r3.xxxx, cb0[0].xyzw
+mul r4.xyzw, r3.yyyy, cb0[1].xyzw
+add r2.xyzw, r2.xyzw, r4.xyzw
+mul r4.xyzw, r3.zzzz, cb0[2].xyzw
+add r2.xyzw, r2.xyzw, r4.xyzw
+mul r3.xyzw, r3.wwww, cb0[3].xyzw
 add r2.xyzw, r2.xyzw, r3.xyzw
 dp4 r3.x, r2.xyzw, r2.xyzw
 rsq r3.x, r3.x
 mul r2.xyzw, r2.xyzw, r3.xxxx  // r2.x <- vout.world_normal.x; r2.y <- vout.world_normal.y; r2.z <- vout.world_normal.z; r2.w <- vout.world_normal.w
 
-#line 9
+#line 21
 mov r3.xy, v2.xyxx  // r3.x <- vout.texcoord.x; r3.y <- vout.texcoord.y
 
-#line 12
+#line 24
 mov r4.xyzw, cb0[4].xyzw  // r4.x <- vout.color.x; r4.y <- vout.color.y; r4.z <- vout.color.z; r4.w <- vout.color.w
 
-#line 28
-mov o0.xyzw, r0.xyzw
-mov o1.xyzw, r1.xyzw
+#line 40
+mov o0.xyzw, r1.xyzw
+mov o1.xyzw, r0.xyzw
 mov o2.xyzw, r2.xyzw
 mov o4.xyzw, r4.xyzw
 mov o3.xy, r3.xyxx
 ret 
-// Approximately 61 instruction slots used
+// Approximately 104 instruction slots used

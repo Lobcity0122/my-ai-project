@@ -48,6 +48,7 @@ class skinned_mesh
 {
 public:
 	static const int MAX_BONE_INFLUENCES{ 4 };
+	static const int MAX_BONES{ 256 };
 
 	// 頂点データ構造体(位置、法線、テクスチャ座標)
 	struct vertex
@@ -64,6 +65,7 @@ public:
 	{
 		DirectX::XMFLOAT4X4 world;
 		DirectX::XMFLOAT4 material_color;
+		DirectX::XMFLOAT4X4 bone_transforms[MAX_BONES]{ { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 } };
 	};
 
 	// skinned_meshクラスにメッシュ構造体
