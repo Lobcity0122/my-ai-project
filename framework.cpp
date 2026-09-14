@@ -1,4 +1,6 @@
-﻿#include "framework.h"
+﻿// 2026/09/14 UNIT28まで完成
+
+#include "framework.h"
 #include "shader.h"
 
 using namespace DirectX;
