@@ -277,7 +277,8 @@ bool framework::initialize()
 	// \\Mr.Incredible\\Mr.Incredible.obj
 
 	// skinned_meshオブジェクトを生成する
-	skinned_meshes[0] = make_unique<skinned_mesh>(device.Get(), ".\\resources\\plantune.fbx", false, 60.0f);
+	skinned_meshes[0] = make_unique<skinned_mesh>(device.Get(), ".\\resources\\AimTest\\MNK_Mesh.fbx");
+	skinned_meshes[0]->append_animations(".\\resources\\AimTest\\Aim_Space.fbx", 0);
 
 	return true;
 }
@@ -408,6 +409,7 @@ void framework::update(float elapsed_time/*Elapsed seconds from last frame*/)
 		ImGui::ColorEdit4("skinned Color", skinned_mesh_color);
 		ImGui::DragFloat("neck rotation", &neck_rotation, 0.01f, -3.14159f, 3.14159f);
 		ImGui::DragFloat("neck translation X", &neck_translation_x, 1.0f);
+		ImGui::SliderFloat("animation blend", &animation_blend_factor, 0.0f, 1.0f);
 	}
 	
 	ImGui::End();
@@ -576,7 +578,7 @@ void framework::render(float elapsed_time/*Elapsed seconds from last frame*/)
 		}, // 右手座標系（OpenGLのデフォルト）＋Y軸反転
 	};
 
-	// plantune.fbx はセンチメートル単位なので、描画時にメートル単位へ変換する。
+	// MNK_Mesh.fbx はセンチメートル単位なので、描画時にメートル単位へ変換する。
 	const float scale_factor = 0.01f;
 	DirectX::XMMATRIX C{
 		DirectX::XMLoadFloat4x4(&coordinate_system_transforms[0])
@@ -733,6 +735,7 @@ void framework::render(float elapsed_time/*Elapsed seconds from last frame*/)
 	#endif
 
 	// skinned_meshクラスのrenderメンバ関数を呼び出す
+#if 0
 	int clip_index{ 0 };
 	int frame_index{ 0 };
 	static float animation_tick{ 0 };
@@ -749,10 +752,13 @@ void framework::render(float elapsed_time/*Elapsed seconds from last frame*/)
 		animation_tick += elapsed_time;
 	}
 	animation::keyframe& keyframe{ animation.sequence.at(frame_index) };
-#if 1
-	XMStoreFloat4(&keyframe.nodes.at(30).rotation,
-		DirectX::XMQuaternionRotationAxis(DirectX::XMVectorSet(1, 0, 0, 0), neck_rotation));
-	keyframe.nodes.at(30).translation.x = neck_translation_x;
+#else
+	animation::keyframe keyframe;
+	const animation::keyframe* keyframes[2]{
+		&skinned_meshes[0]->animation_clips.at(0).sequence.at(40),
+		&skinned_meshes[0]->animation_clips.at(0).sequence.at(80)
+	};
+	skinned_meshes[0]->blend_animations(keyframes, animation_blend_factor, keyframe);
 	skinned_meshes[0]->update_animation(keyframe);
 #endif
 	skinned_meshes[0]->render(

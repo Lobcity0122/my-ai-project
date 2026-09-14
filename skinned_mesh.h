@@ -206,6 +206,11 @@ public:
 
 	void update_animation(animation::keyframe& keyframe);
 
+	bool append_animations(const char* animation_filename, float sampling_rate);
+
+	void blend_animations(const animation::keyframe* keyframes[2], float factor,
+		animation::keyframe& keyframe);
+
 	// GPUバッファ（頂点/インデックスバッファ）生成
 	void create_com_objects(ID3D11Device* device,const char* fbx_filename);
 

@@ -153,6 +153,8 @@ public:
 	float neck_rotation{ 0.0f };
 	float neck_translation_x{ 120.0f };
 
+	float animation_blend_factor{ 0.5f };
+
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	
 	framework(HWND hwnd);

@@ -180,6 +180,49 @@ void skinned_mesh::update_animation(animation::keyframe& keyframe)
 	}
 }
 
+// FBXファイルからアニメーションデータを追加で読み込む関数
+bool skinned_mesh::append_animations(const char* animation_filename, float sampling_rate)
+{
+	FbxManager* fbx_manager{ FbxManager::Create() };
+	FbxScene* fbx_scene{ FbxScene::Create(fbx_manager, "") };
+
+	FbxImporter* fbx_importer{ FbxImporter::Create(fbx_manager, "") };
+	bool import_status{ false };
+	import_status = fbx_importer->Initialize(animation_filename);
+	_ASSERT_EXPR_A(import_status, fbx_importer->GetStatus().GetErrorString());
+	import_status = fbx_importer->Import(fbx_scene);
+	_ASSERT_EXPR_A(import_status, fbx_importer->GetStatus().GetErrorString());
+
+	fetch_animations(fbx_scene, animation_clips, sampling_rate);
+
+	fbx_manager->Destroy();
+
+	return true;
+}
+
+void skinned_mesh::blend_animations(const animation::keyframe* keyframes[2], float factor,
+	animation::keyframe& keyframe)
+{
+	size_t node_count{ keyframes[0]->nodes.size() };
+	keyframe.nodes.resize(node_count);
+	for (size_t node_index = 0; node_index < node_count; ++node_index)
+	{
+		XMVECTOR S[2]{
+			XMLoadFloat3(&keyframes[0]->nodes.at(node_index).scaling),
+			XMLoadFloat3(&keyframes[1]->nodes.at(node_index).scaling) };
+		XMStoreFloat3(&keyframe.nodes.at(node_index).scaling, XMVectorLerp(S[0], S[1], factor));
+
+		XMVECTOR R[2]{
+			XMLoadFloat4(&keyframes[0]->nodes.at(node_index).rotation),
+			XMLoadFloat4(&keyframes[1]->nodes.at(node_index).rotation) };
+		XMStoreFloat4(&keyframe.nodes.at(node_index).rotation, XMQuaternionSlerp(R[0], R[1], factor));
+
+		XMVECTOR T[2]{ XMLoadFloat3(&keyframes[0]->nodes.at(node_index).translation),
+			XMLoadFloat3(&keyframes[1]->nodes.at(node_index).translation) };
+		XMStoreFloat3(&keyframe.nodes.at(node_index).translation, XMVectorLerp(T[0], T[1], factor));
+	}
+}
+
 // FBX SDKのFbxDouble3をDirectXMathのXMFLOAT3に変換する関数
 inline XMFLOAT3 to_xmfloat3(const FbxDouble3& fbxdouble3)
 {
