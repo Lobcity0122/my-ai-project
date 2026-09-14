@@ -150,6 +150,9 @@ public:
 
 	float skinned_mesh_color[4] = { 1.0f,1.0f,1.0f,1.0f };
 
+	float neck_rotation{ 0.0f };
+	float neck_translation_x{ 120.0f };
+
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	
 	framework(HWND hwnd);

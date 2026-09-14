@@ -86,6 +86,12 @@ struct animation
 		{
 			// 'global_transform' is used to convert from local space of node to global space of scene.
 			DirectX::XMFLOAT4X4 global_transform{ 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 };
+
+			// The transformation data of a node includes its translation, rotation and scaling vectors
+			// with respect to its parent.
+			DirectX::XMFLOAT3 scaling{ 1, 1, 1 };
+			DirectX::XMFLOAT4 rotation{ 0, 0, 0, 1 }; // Rotation quaternion
+			DirectX::XMFLOAT3 translation{ 0, 0, 0 };
 		};
 		std::vector<node> nodes;
 	};
@@ -197,6 +203,8 @@ public:
 
 	void fetch_animations(FbxScene* fbx_scene, std::vector<animation>& animation_clips,
 		float sampling_rate /*If this value is 0, the animation data will be sampled at the default frame rate.*/);
+
+	void update_animation(animation::keyframe& keyframe);
 
 	// GPUバッファ（頂点/インデックスバッファ）生成
 	void create_com_objects(ID3D11Device* device,const char* fbx_filename);

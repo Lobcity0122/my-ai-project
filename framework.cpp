@@ -277,7 +277,7 @@ bool framework::initialize()
 	// \\Mr.Incredible\\Mr.Incredible.obj
 
 	// skinned_meshオブジェクトを生成する
-	skinned_meshes[0] = make_unique<skinned_mesh>(device.Get(), ".\\resources\\Drone166\\Drone166.1.fbx", false, 60.0f);
+	skinned_meshes[0] = make_unique<skinned_mesh>(device.Get(), ".\\resources\\plantune.fbx", false, 60.0f);
 
 	return true;
 }
@@ -406,6 +406,8 @@ void framework::update(float elapsed_time/*Elapsed seconds from last frame*/)
 		ImGui::SliderFloat3("skinned_Scale", &skinned_mesh_scale.x, 0.1f, 5.0f);
 		// 色の調整（カラーピッカー）
 		ImGui::ColorEdit4("skinned Color", skinned_mesh_color);
+		ImGui::DragFloat("neck rotation", &neck_rotation, 0.01f, -3.14159f, 3.14159f);
+		ImGui::DragFloat("neck translation X", &neck_translation_x, 1.0f);
 	}
 	
 	ImGui::End();
@@ -574,8 +576,8 @@ void framework::render(float elapsed_time/*Elapsed seconds from last frame*/)
 		}, // 右手座標系（OpenGLのデフォルト）＋Y軸反転
 	};
 
-	// Drone166.1.fbx はメートル単位のため、単位変換は不要。
-	const float scale_factor = 1.0f;
+	// plantune.fbx はセンチメートル単位なので、描画時にメートル単位へ変換する。
+	const float scale_factor = 0.01f;
 	DirectX::XMMATRIX C{
 		DirectX::XMLoadFloat4x4(&coordinate_system_transforms[0])
 		* DirectX::XMMatrixScaling(scale_factor, scale_factor, scale_factor)
@@ -747,6 +749,12 @@ void framework::render(float elapsed_time/*Elapsed seconds from last frame*/)
 		animation_tick += elapsed_time;
 	}
 	animation::keyframe& keyframe{ animation.sequence.at(frame_index) };
+#if 1
+	XMStoreFloat4(&keyframe.nodes.at(30).rotation,
+		DirectX::XMQuaternionRotationAxis(DirectX::XMVectorSet(1, 0, 0, 0), neck_rotation));
+	keyframe.nodes.at(30).translation.x = neck_translation_x;
+	skinned_meshes[0]->update_animation(keyframe);
+#endif
 	skinned_meshes[0]->render(
 		immediate_context.Get(),
 		world4,

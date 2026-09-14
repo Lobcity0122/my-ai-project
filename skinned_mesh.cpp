@@ -62,6 +62,9 @@ inline XMFLOAT4X4 to_xmfloat4x4(const FbxAMatrix& fbxamatrix)
     return xmfloat4x4;
 }
 
+inline XMFLOAT3 to_xmfloat3(const FbxDouble3& fbxdouble3);
+inline XMFLOAT4 to_xmfloat4(const FbxDouble4& fbxdouble4);
+
 // FBX SDKのFbxAMatrixをDirectXMathのXMMATRIXに変換する関数
 void skinned_mesh::fetch_skeleton(FbxMesh* fbx_mesh, skeleton& bind_pose)
 {
@@ -142,6 +145,13 @@ void skinned_mesh::fetch_animations(FbxScene* fbx_scene, std::vector<animation>&
 					// 'global_transform' is a transformation matrix of a node with respect to
 					// the scene's global coordinate system.
 					node.global_transform = to_xmfloat4x4(fbx_node->EvaluateGlobalTransform(time));
+
+					// 'local_transform' is a transformation matrix of a node with respect to
+					// its parent's local coordinate system.
+					const FbxAMatrix& local_transform{ fbx_node->EvaluateLocalTransform(time) };
+					node.scaling = to_xmfloat3(local_transform.GetS());
+					node.rotation = to_xmfloat4(local_transform.GetQ());
+					node.translation = to_xmfloat3(local_transform.GetT());
 				}
 			}
 		}
@@ -149,6 +159,24 @@ void skinned_mesh::fetch_animations(FbxScene* fbx_scene, std::vector<animation>&
 	for (int animation_stack_index = 0; animation_stack_index < animation_stack_count; ++animation_stack_index)
 	{
 		delete animation_stack_names[animation_stack_index];
+	}
+}
+
+void skinned_mesh::update_animation(animation::keyframe& keyframe)
+{
+	size_t node_count{ keyframe.nodes.size() };
+	for (size_t node_index = 0; node_index < node_count; ++node_index)
+	{
+		animation::keyframe::node& node{ keyframe.nodes.at(node_index) };
+		XMMATRIX S{ XMMatrixScaling(node.scaling.x, node.scaling.y, node.scaling.z) };
+		XMMATRIX R{ XMMatrixRotationQuaternion(XMLoadFloat4(&node.rotation)) };
+		XMMATRIX T{ XMMatrixTranslation(node.translation.x, node.translation.y, node.translation.z) };
+
+		int64_t parent_index{ scene_view.nodes.at(node_index).parent_index };
+		XMMATRIX P{ parent_index < 0 ? XMMatrixIdentity() :
+			XMLoadFloat4x4(&keyframe.nodes.at(parent_index).global_transform) };
+
+		XMStoreFloat4x4(&node.global_transform, S * R * T * P);
 	}
 }
 
