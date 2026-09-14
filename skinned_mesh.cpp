@@ -1,4 +1,4 @@
-#include <sstream>
+﻿#include <sstream>
 #include <functional>
 #include <algorithm>
 #include "misc.h"
@@ -532,19 +532,22 @@ void skinned_mesh::render(ID3D11DeviceContext* immediate_context,
         immediate_context->VSSetShader(vertex_shader.Get(), nullptr, 0);
         immediate_context->PSSetShader(pixel_shader.Get(), nullptr, 0);
         
-		// 定数バッファにワールド行列とマテリアルカラーを設定
+		// メッシュ自身のキーフレームにおけるグローバル変換行列を取得
         constants data;
-        XMStoreFloat4x4(&data.world, XMLoadFloat4x4(&mesh.default_global_transform) * XMLoadFloat4x4(&world));
+        const animation::keyframe::node& mesh_node{ keyframe->nodes.at(mesh.node_index) };
+        XMStoreFloat4x4(&data.world, XMLoadFloat4x4(&mesh_node.global_transform) * XMLoadFloat4x4(&world));
 
         const size_t bone_count{ mesh.bind_pose.bones.size() };
-        for (int bone_index = 0; bone_index < bone_count; ++bone_index)
+		_ASSERT_EXPR(bone_count < MAX_BONES, L"The value of the 'bone_count' has exceeded MAX_BONES.");
+        
+        for (size_t bone_index = 0; bone_index < bone_count; ++bone_index)
         {
             const skeleton::bone& bone{ mesh.bind_pose.bones.at(bone_index) };
             const animation::keyframe::node& bone_node{ keyframe->nodes.at(bone.node_index) };
             XMStoreFloat4x4(&data.bone_transforms[bone_index],
                 XMLoadFloat4x4(&bone.offset_transform) *
                 XMLoadFloat4x4(&bone_node.global_transform) *
-                XMMatrixInverse(nullptr, XMLoadFloat4x4(&mesh.default_global_transform))
+                XMMatrixInverse(nullptr, XMLoadFloat4x4(&mesh_node.global_transform))
             );
         }
 
