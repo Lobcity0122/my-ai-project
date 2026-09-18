@@ -279,7 +279,7 @@ bool framework::initialize()
 	// \\Mr.Incredible\\Mr.Incredible.obj
 
 	// skinned_meshオブジェクトを生成する
-	skinned_meshes[0] = make_unique<skinned_mesh>(device.Get(), ".\\resources\\plantune.fbx", false, 60.0f);
+	skinned_meshes[0] = make_unique<skinned_mesh>(device.Get(), ".\\resources\\nico.fbx", false, 60.0f);
 
 	return true;
 }
@@ -736,7 +736,7 @@ void framework::render(float elapsed_time/*Elapsed seconds from last frame*/)
 	#endif
 
 	// skinned_meshクラスのrenderメンバ関数を呼び出す
-#if 0
+#if 1
 	int clip_index{ 0 };
 	int frame_index{ 0 };
 	static float animation_tick{ 0 };

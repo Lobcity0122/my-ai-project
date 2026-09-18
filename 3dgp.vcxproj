@@ -117,7 +117,7 @@
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>_DEBUG;_WINDOWS;USE_IMGUI;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
-      <AdditionalIncludeDirectories>.\DirectXTK-main\Inc;%(AdditionalIncludeDirectories);C:\Program Files\Autodesk\FBX\FBX SDK\2020.3.1\include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>.\cereal-master\include;.\DirectXTK-main\Inc;%(AdditionalIncludeDirectories);C:\Program Files\Autodesk\FBX\FBX SDK\2020.3.1\include</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
@@ -170,7 +170,7 @@
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>USE_IMGUI;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
-      <AdditionalIncludeDirectories>.\DirectXTK-main\Inc;%(AdditionalIncludeDirectories);C:\Program Files\Autodesk\FBX\FBX SDK\2020.3.1\include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>.\cereal-master\include;.\DirectXTK-main\Inc;%(AdditionalIncludeDirectories);C:\Program Files\Autodesk\FBX\FBX SDK\2020.3.1\include</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>

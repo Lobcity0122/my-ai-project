@@ -1,6 +1,7 @@
 ﻿#include <sstream>
 #include <functional>
 #include <algorithm>
+#include <fstream>
 #include "misc.h"
 #include "shader.h"
 #include "texture.h"
@@ -183,23 +184,43 @@ void skinned_mesh::update_animation(animation::keyframe& keyframe)
 // FBXファイルからアニメーションデータを追加で読み込む関数
 bool skinned_mesh::append_animations(const char* animation_filename, float sampling_rate)
 {
-	FbxManager* fbx_manager{ FbxManager::Create() };
-	FbxScene* fbx_scene{ FbxScene::Create(fbx_manager, "") };
+	std::filesystem::path cereal_filename(animation_filename);
+	cereal_filename.replace_extension("cereal");
 
-	FbxImporter* fbx_importer{ FbxImporter::Create(fbx_manager, "") };
-	bool import_status{ false };
-	import_status = fbx_importer->Initialize(animation_filename);
-	_ASSERT_EXPR_A(import_status, fbx_importer->GetStatus().GetErrorString());
-	import_status = fbx_importer->Import(fbx_scene);
-	_ASSERT_EXPR_A(import_status, fbx_importer->GetStatus().GetErrorString());
+	// 追加するFBXごとにアニメーションだけをキャッシュする。
+	// 本体メッシュのanimation_clipsを上書きしないため、ローカル変数へ復元してから末尾へ追加する。
+	std::vector<animation> appended_animation_clips;
+	if (std::filesystem::exists(cereal_filename.c_str()))
+	{
+		std::ifstream ifs(cereal_filename.c_str(), std::ios::binary);
+		cereal::BinaryInputArchive deserialization(ifs);
+		deserialization(appended_animation_clips);
+	}
+	else
+	{
+		FbxManager* fbx_manager{ FbxManager::Create() };
+		FbxScene* fbx_scene{ FbxScene::Create(fbx_manager, "") };
 
-	fetch_animations(fbx_scene, animation_clips, sampling_rate);
+		FbxImporter* fbx_importer{ FbxImporter::Create(fbx_manager, "") };
+		bool import_status{ fbx_importer->Initialize(animation_filename) };
+		_ASSERT_EXPR_A(import_status, fbx_importer->GetStatus().GetErrorString());
+		import_status = fbx_importer->Import(fbx_scene);
+		_ASSERT_EXPR_A(import_status, fbx_importer->GetStatus().GetErrorString());
 
-	fbx_manager->Destroy();
+		fetch_animations(fbx_scene, appended_animation_clips, sampling_rate);
+		fbx_manager->Destroy();
 
+		std::ofstream ofs(cereal_filename.c_str(), std::ios::binary);
+		cereal::BinaryOutputArchive serialization(ofs);
+		serialization(appended_animation_clips);
+	}
+
+	for (animation& animation_clip : appended_animation_clips)
+	{
+		animation_clips.emplace_back(std::move(animation_clip));
+	}
 	return true;
 }
-
 void skinned_mesh::blend_animations(const animation::keyframe* keyframes[2], float factor,
 	animation::keyframe& keyframe)
 {
@@ -247,6 +268,27 @@ inline XMFLOAT4 to_xmfloat4(const FbxDouble4& fbxdouble4)
 // コンストラクタ：FBXファイルのインポートとノードツリー走査
 skinned_mesh::skinned_mesh(ID3D11Device* device, const char* fbx_filename, bool triangulate, float sampling_rate)
 {
+    std::filesystem::path cereal_filename(fbx_filename);
+    cereal_filename.replace_extension("cereal");
+    if (std::filesystem::exists(cereal_filename.c_str()))
+    {
+        std::ifstream ifs(cereal_filename.c_str(), std::ios::binary);
+        cereal::BinaryInputArchive deserialization(ifs);
+        deserialization(scene_view, meshes, materials, animation_clips);
+
+        // Cerealの保存対象ではない全体境界ボックスを、保存済みの各メッシュ境界ボックスから再構築する。
+        for (const mesh& mesh : meshes)
+        {
+            bounding_box_min.x = (std::min)(bounding_box_min.x, mesh.bounding_box[0].x);
+            bounding_box_min.y = (std::min)(bounding_box_min.y, mesh.bounding_box[0].y);
+            bounding_box_min.z = (std::min)(bounding_box_min.z, mesh.bounding_box[0].z);
+            bounding_box_max.x = (std::max)(bounding_box_max.x, mesh.bounding_box[1].x);
+            bounding_box_max.y = (std::max)(bounding_box_max.y, mesh.bounding_box[1].y);
+            bounding_box_max.z = (std::max)(bounding_box_max.z, mesh.bounding_box[1].z);
+        }
+    }
+    else
+    {
     // 1. FBX SDK全体の管理マネージャーを作成
     FbxManager* fbx_manager{ FbxManager::Create() };
 
@@ -323,6 +365,10 @@ skinned_mesh::skinned_mesh(ID3D11Device* device, const char* fbx_filename, bool 
 
     // 8. マネージャーを破棄することで、すべてのFBXオブジェクトを一括解放
     fbx_manager->Destroy();
+    std::ofstream ofs(cereal_filename.c_str(), std::ios::binary);
+    cereal::BinaryOutputArchive serialization(ofs);
+    serialization(scene_view, meshes, materials, animation_clips);
+    }
 
     // COMオブジェクト作成
     create_com_objects(device, fbx_filename);
