@@ -279,8 +279,7 @@ bool framework::initialize()
 	// \\Mr.Incredible\\Mr.Incredible.obj
 
 	// skinned_meshオブジェクトを生成する
-	skinned_meshes[0] = make_unique<skinned_mesh>(device.Get(), ".\\resources\\AimTest\\MNK_Mesh.fbx");
-	skinned_meshes[0]->append_animations(".\\resources\\AimTest\\Aim_Space.fbx", 0);
+	skinned_meshes[0] = make_unique<skinned_mesh>(device.Get(), ".\\resources\\plantune.fbx", false, 60.0f);
 
 	return true;
 }

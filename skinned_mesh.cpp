@@ -438,6 +438,15 @@ void skinned_mesh::fetch_meshes(FbxScene* fbx_scene, std::vector<mesh>& meshes)
                    vertex.texcoord.y = 1.0f - static_cast<float>(uv[1]);
                }
 
+			   if (fbx_mesh->GenerateTangentsData(0, false))
+			   {
+				   const FbxGeometryElementTangent* tangent = fbx_mesh->GetElementTangent(0);
+				   vertex.tangent.x = static_cast<float>(tangent->GetDirectArray().GetAt(vertex_index)[0]);
+				   vertex.tangent.y = static_cast<float>(tangent->GetDirectArray().GetAt(vertex_index)[1]);
+				   vertex.tangent.z = static_cast<float>(tangent->GetDirectArray().GetAt(vertex_index)[2]);
+				   vertex.tangent.w = static_cast<float>(tangent->GetDirectArray().GetAt(vertex_index)[3]);
+			   }
+
                const bone_influences_per_control_point& influences_per_control_point
                { bone_influences.at(polygon_vertex) };
                std::vector<bone_influence> sorted_influences{ influences_per_control_point };
@@ -470,6 +479,16 @@ void skinned_mesh::fetch_meshes(FbxScene* fbx_scene, std::vector<mesh>& meshes)
 			   subset.index_count++;
            }
         }
+
+		for (const vertex& v : mesh.vertices)
+		{
+			mesh.bounding_box[0].x = std::min<float>(mesh.bounding_box[0].x, v.position.x);
+			mesh.bounding_box[0].y = std::min<float>(mesh.bounding_box[0].y, v.position.y);
+			mesh.bounding_box[0].z = std::min<float>(mesh.bounding_box[0].z, v.position.z);
+			mesh.bounding_box[1].x = std::max<float>(mesh.bounding_box[1].x, v.position.x);
+			mesh.bounding_box[1].y = std::max<float>(mesh.bounding_box[1].y, v.position.y);
+			mesh.bounding_box[1].z = std::max<float>(mesh.bounding_box[1].z, v.position.z);
+		}
     }
 }
 
@@ -505,6 +524,14 @@ void skinned_mesh::fetch_materials(FbxScene* fbx_scene,
                 material.texture_filenames[0] =
                     fbx_texture ? fbx_texture->GetRelativeFileName() : "";
             }
+
+			fbx_property = fbx_material->FindProperty(FbxSurfaceMaterial::sNormalMap);
+			if (fbx_property.IsValid())
+			{
+				const FbxFileTexture* fbx_texture{ fbx_property.GetSrcObject<FbxFileTexture>() };
+				material.texture_filenames[1] =
+					fbx_texture ? fbx_texture->GetRelativeFileName() : "";
+			}
             materials.emplace(material.unique_id, std::move(material));
         }
     }
@@ -550,6 +577,7 @@ void skinned_mesh::create_com_objects(ID3D11Device* device, const char* fbx_file
     {
         { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT },
         { "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT },
+		{ "TANGENT", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT },
         { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT },
         { "WEIGHTS", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT },
         { "BONES", 0, DXGI_FORMAT_R32G32B32A32_UINT, 0, D3D11_APPEND_ALIGNED_ELEMENT },
@@ -569,19 +597,23 @@ void skinned_mesh::create_com_objects(ID3D11Device* device, const char* fbx_file
     for (std::unordered_map<uint64_t, material>::iterator iterator = materials.begin();
         iterator != materials.end(); ++iterator)
     {
-        if (iterator->second.texture_filenames[0].size() > 0)
-        {
-            std::filesystem::path path(fbx_filename);
-            path.replace_filename(iterator->second.texture_filenames[0]);
-            D3D11_TEXTURE2D_DESC texture2d_desc;
-            load_texture_from_file(device, path.c_str(),
-                iterator->second.shader_resource_views[0].GetAddressOf(), &texture2d_desc);
-        }
-        else
-        {
-            make_dummy_texture(device, iterator->second.shader_resource_views[0].GetAddressOf(),
-                0xFFFFFFFF, 16);
-        }
+		for (size_t texture_index = 0; texture_index < 2; ++texture_index)
+		{
+			if (iterator->second.texture_filenames[texture_index].size() > 0)
+			{
+				std::filesystem::path path(fbx_filename);
+				path.replace_filename(iterator->second.texture_filenames[texture_index]);
+				D3D11_TEXTURE2D_DESC texture2d_desc;
+				load_texture_from_file(device, path.c_str(),
+					iterator->second.shader_resource_views[texture_index].GetAddressOf(), &texture2d_desc);
+			}
+			else
+			{
+				make_dummy_texture(device,
+					iterator->second.shader_resource_views[texture_index].GetAddressOf(),
+					texture_index == 1 ? 0xFFFF7F7F : 0xFFFFFFFF, 16);
+			}
+		}
     }
 }
 
@@ -591,7 +623,7 @@ void skinned_mesh::render(ID3D11DeviceContext* immediate_context,
     const animation::keyframe* keyframe)
 {
 	// メッシュごとに描画する
-    for (const mesh& mesh : meshes)
+    for (mesh& mesh : meshes)
     {
         uint32_t stride{ sizeof(vertex) };
         uint32_t offset{ 0 };
@@ -603,23 +635,34 @@ void skinned_mesh::render(ID3D11DeviceContext* immediate_context,
         immediate_context->VSSetShader(vertex_shader.Get(), nullptr, 0);
         immediate_context->PSSetShader(pixel_shader.Get(), nullptr, 0);
         
-		// メッシュ自身のキーフレームにおけるグローバル変換行列を取得
         constants data;
-        const animation::keyframe::node& mesh_node{ keyframe->nodes.at(mesh.node_index) };
-        XMStoreFloat4x4(&data.world, XMLoadFloat4x4(&mesh_node.global_transform) * XMLoadFloat4x4(&world));
-
-        const size_t bone_count{ mesh.bind_pose.bones.size() };
-		_ASSERT_EXPR(bone_count < MAX_BONES, L"The value of the 'bone_count' has exceeded MAX_BONES.");
-        
-        for (size_t bone_index = 0; bone_index < bone_count; ++bone_index)
+        if (keyframe && keyframe->nodes.size() > 0)
         {
-            const skeleton::bone& bone{ mesh.bind_pose.bones.at(bone_index) };
-            const animation::keyframe::node& bone_node{ keyframe->nodes.at(bone.node_index) };
-            XMStoreFloat4x4(&data.bone_transforms[bone_index],
-                XMLoadFloat4x4(&bone.offset_transform) *
-                XMLoadFloat4x4(&bone_node.global_transform) *
-                XMMatrixInverse(nullptr, XMLoadFloat4x4(&mesh_node.global_transform))
-            );
+            const animation::keyframe::node& mesh_node{ keyframe->nodes.at(mesh.node_index) };
+            XMStoreFloat4x4(&data.world, XMLoadFloat4x4(&mesh_node.global_transform) * XMLoadFloat4x4(&world));
+
+            const size_t bone_count{ mesh.bind_pose.bones.size() };
+			_ASSERT_EXPR(bone_count < MAX_BONES, L"The value of the 'bone_count' has exceeded MAX_BONES.");
+
+            for (size_t bone_index = 0; bone_index < bone_count; ++bone_index)
+            {
+                const skeleton::bone& bone{ mesh.bind_pose.bones.at(bone_index) };
+                const animation::keyframe::node& bone_node{ keyframe->nodes.at(bone.node_index) };
+                XMStoreFloat4x4(&data.bone_transforms[bone_index],
+                    XMLoadFloat4x4(&bone.offset_transform) *
+                    XMLoadFloat4x4(&bone_node.global_transform) *
+                    XMMatrixInverse(nullptr, XMLoadFloat4x4(&mesh_node.global_transform))
+                );
+            }
+        }
+        else
+        {
+            XMStoreFloat4x4(&data.world,
+                XMLoadFloat4x4(&mesh.default_global_transform) * XMLoadFloat4x4(&world));
+            for (size_t bone_index = 0; bone_index < MAX_BONES; ++bone_index)
+            {
+                data.bone_transforms[bone_index] = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 };
+            }
         }
 
 		// サブセットごとに描画する
@@ -630,6 +673,7 @@ void skinned_mesh::render(ID3D11DeviceContext* immediate_context,
             immediate_context->UpdateSubresource(constant_buffer.Get(), 0, 0, &data, 0, 0);
             immediate_context->VSSetConstantBuffers(0, 1, constant_buffer.GetAddressOf());
             immediate_context->PSSetShaderResources(0, 1, material.shader_resource_views[0].GetAddressOf());
+			immediate_context->PSSetShaderResources(1, 1, material.shader_resource_views[1].GetAddressOf());
             immediate_context->DrawIndexed(subset.index_count, subset.start_index_location, 0);
         }
 

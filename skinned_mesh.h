@@ -109,7 +109,8 @@ public:
 	struct vertex
 	{
 		DirectX::XMFLOAT3 position;                     // 頂点座標
-		DirectX::XMFLOAT3 normal{ 0, 1, 0 };            // 法線ベクトル
+		DirectX::XMFLOAT3 normal{ 0, 1, 0 };
+		DirectX::XMFLOAT4 tangent{ 1, 0, 0, 1 };            // 法線ベクトル
 		DirectX::XMFLOAT2 texcoord{ 0, 0 };             // UV座標
 		float bone_weights[MAX_BONE_INFLUENCES]{ 1, 0, 0, 0 };
 		uint32_t bone_indices[MAX_BONE_INFLUENCES]{};
@@ -132,6 +133,12 @@ public:
 		int64_t node_index{ 0 };
 
 		skeleton bind_pose;
+
+		DirectX::XMFLOAT3 bounding_box[2]
+		{
+			{ +D3D11_FLOAT32_MAX, +D3D11_FLOAT32_MAX, +D3D11_FLOAT32_MAX },
+			{ -D3D11_FLOAT32_MAX, -D3D11_FLOAT32_MAX, -D3D11_FLOAT32_MAX }
+		};
 
 		Microsoft::WRL::ComPtr<ID3D11Buffer> vertex_buffer;
 		Microsoft::WRL::ComPtr<ID3D11Buffer> index_buffer;
