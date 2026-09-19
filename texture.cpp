@@ -1,6 +1,8 @@
 #include "texture.h"
 
 #include <WICTextureLoader.h> // DirectXTKに含まれる、一般的な画像（PNGやJPEG）をDirectX11用に読み込むための便利な機能のライブラリ
+#include <DDSTextureLoader.h>
+#include <filesystem>
 using namespace DirectX;
 
 #include <wrl.h> // ComPtrを使うために必要なヘッダーファイル。Microsoft::WRLの名前空間の中に ComPtr が定義されている。
@@ -40,13 +42,29 @@ HRESULT load_texture_from_file(
     }
     else
     {
-        // 新しく読み込む
-        hr = CreateWICTextureFromFile(
-            device,
-            filename,
-            resource.GetAddressOf(),
-            shader_resource_view
-        );
+        std::filesystem::path dds_filename(filename);
+        dds_filename.replace_extension("dds");
+        if (std::filesystem::exists(dds_filename.c_str()))
+        {
+            hr = CreateDDSTextureFromFile(
+                device,
+                dds_filename.c_str(),
+                resource.GetAddressOf(),
+                shader_resource_view
+            );
+            _ASSERT_EXPR(SUCCEEDED(hr), hr_trace(hr));
+        }
+        else
+        {
+            // DDSがない場合は従来どおり元画像をWICローダーで読み込む
+            hr = CreateWICTextureFromFile(
+                device,
+                filename,
+                resource.GetAddressOf(),
+                shader_resource_view
+            );
+            _ASSERT_EXPR(SUCCEEDED(hr), hr_trace(hr));
+        }
 
         // 読み込んだテクスチャを保存
         resources.insert(make_pair(filename, *shader_resource_view));
