@@ -67,8 +67,20 @@
     <ClCompile Include="skinned_mesh.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
+    <ClCompile Include="framebuffer.cpp">
+      <Filter>Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="fullscreen_quad.cpp">
+      <Filter>Sources</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="framebuffer.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="fullscreen_quad.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
     <ClInclude Include="framework.h">
       <Filter>Headers</Filter>
     </ClInclude>
@@ -125,6 +137,9 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
+    <None Include="fullscreen_quad.hlsli">
+      <Filter>Shaders</Filter>
+    </None>
     <None Include="sprite.hlsli">
       <Filter>Shaders</Filter>
     </None>
@@ -139,6 +154,18 @@
     </None>
   </ItemGroup>
   <ItemGroup>
+    <FxCompile Include="fullscreen_quad_vs.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="fullscreen_quad_ps.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="luminance_extraction_ps.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="blur_ps.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
     <FxCompile Include="sprite_vs.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>

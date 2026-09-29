@@ -30,6 +30,8 @@ using namespace ImGui;
 #include "geometric_primitive.h"
 #include "static_mesh.h"
 #include "skinned_mesh.h"
+#include "framebuffer.h"
+#include "fullscreen_quad.h"
 
 #define SCREEN_WIDTH 1280
 #define SCREEN_HEIGHT 720
@@ -58,6 +60,8 @@ public:
 	// 切り替え用のピクセルシェーダー配列
 	ComPtr<ID3D11PixelShader> replaced_pixel_shaders[8];
 
+	Microsoft::WRL::ComPtr<ID3D11PixelShader> pixel_shaders[8];
+
 	unique_ptr<sprite> sprites[8];
 	unique_ptr<sprite_batch> sprite_batches[8];
 
@@ -67,6 +71,14 @@ public:
 		DirectX::XMFLOAT4X4 view_projection; // ビュー・プロジェクション変換行列
 		DirectX::XMFLOAT4 light_direction;   // ライトの向き
 		DirectX::XMFLOAT4 camera_position;   // カメラの位置
+	};
+
+	struct post_process_constants
+	{
+		float luminance_threshold{ 0.8f };
+		float gaussian_sigma{ 1.0f };
+		float bloom_intensity{ 1.0f };
+		float exposure{ 1.2f };
 	};
 	ComPtr<ID3D11Buffer> constant_buffers[8];
 
@@ -82,6 +94,10 @@ public:
 	// sknned_mesh *型配列を要素数8で宣言
 	std::unique_ptr<skinned_mesh> skinned_meshes[8];
 
+	std::unique_ptr<framebuffer> framebuffers[8];
+
+	std::unique_ptr<fullscreen_quad> bit_block_transfer;
+
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// ImGuiで各種設定
 	// [ステート選択用インデックス]
@@ -89,6 +105,10 @@ public:
 	int Blend_index = 0;   // 初期値 Alpha Blend
 	int Depth_index = 3;   // 初期値 Test:OFF/Write:OFF
 	int Rasterizer_index = 0; // 初期値 裏面カリング(塗りつぶし)
+	float luminance_threshold{ 0.8f };
+	float gaussian_sigma{ 1.0f };
+	float bloom_intensity{ 1.0f };
+	float exposure{ 1.2f };
 
 	// Sprite0用パラメータ
 	DirectX::XMFLOAT2 position0{ 0.0f, 0.0f };

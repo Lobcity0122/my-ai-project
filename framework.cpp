@@ -43,9 +43,9 @@ bool framework::initialize()
 	// どのようにテクスチャの色をサンプルするかの設定など
 	D3D11_SAMPLER_DESC sampler_desc;
 	sampler_desc.Filter = D3D11_FILTER_MIN_MAG_MIP_POINT;
-	sampler_desc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
-	sampler_desc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
-	sampler_desc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
+	sampler_desc.AddressU = D3D11_TEXTURE_ADDRESS_BORDER;
+	sampler_desc.AddressV = D3D11_TEXTURE_ADDRESS_BORDER;
+	sampler_desc.AddressW = D3D11_TEXTURE_ADDRESS_BORDER;
 	sampler_desc.MipLODBias = 0;
 	sampler_desc.MaxAnisotropy = 16;
 	sampler_desc.ComparisonFunc = D3D11_COMPARISON_ALWAYS;
@@ -258,14 +258,20 @@ bool framework::initialize()
 	hr = device->CreateBuffer(&buffer_desc, nullptr, constant_buffers[0].GetAddressOf());
 	_ASSERT_EXPR(SUCCEEDED(hr), hr_trace(hr));
 
+	buffer_desc.ByteWidth = sizeof(post_process_constants);
+	hr = device->CreateBuffer(&buffer_desc, nullptr, constant_buffers[1].GetAddressOf());
+	_ASSERT_EXPR(SUCCEEDED(hr), hr_trace(hr));
+
 	// 画像
 	sprites[0] = make_unique<sprite>(device.Get(), L".\\resources\\cyberpunk.jpg");
 	sprites[1] = make_unique<sprite>(device.Get(), L".\\resources\\player-sprites.png");
-	sprite_batches[0] = make_unique<sprite_batch>(device.Get(), L".\\resources\\player-sprites.png", 2048);
+	sprite_batches[0] = std::make_unique<sprite_batch>(device.Get(), L".\\resources\\screenshot.jpg", 1);
 	sprites[2] = make_unique<sprite>(device.Get(), L".\\resources\\fonts\\font2.png");
 
 	// 切り替え用のピクセルシェーダーを作成
 	create_ps_from_cso(device.Get(), "effect_ps.cso", replaced_pixel_shaders[0].GetAddressOf());
+	create_ps_from_cso(device.Get(), "luminance_extraction_ps.cso", pixel_shaders[0].GetAddressOf());
+	create_ps_from_cso(device.Get(), "blur_ps.cso", pixel_shaders[1].GetAddressOf());
 
 	// 幾何プリミティブ
 	//geometric_primitives[0] = make_unique<geometric_primitive>(device.Get());
@@ -277,7 +283,11 @@ bool framework::initialize()
 	// \\Mr.Incredible\\Mr.Incredible.obj
 
 	// skinned_meshオブジェクトを生成する
-	skinned_meshes[0] = make_unique<skinned_mesh>(device.Get(), ".\\resources\\nico.fbx", false, 60.0f);
+	skinned_meshes[0] = std::make_unique<skinned_mesh>(device.Get(), ".\\resources\\nico.fbx");
+
+	framebuffers[0] = std::make_unique<framebuffer>(device.Get(), 1280, 720);
+	framebuffers[1] = std::make_unique<framebuffer>(device.Get(), 1280 / 2, 720 / 2);
+	bit_block_transfer = std::make_unique<fullscreen_quad>(device.Get());
 
 	return true;
 }
@@ -309,6 +319,10 @@ void framework::update(float elapsed_time/*Elapsed seconds from last frame*/)
 		// ラスタライザステートの切り替え
 		const char* rasterizer_names[] = { "Fill","Wireframe","Wireframe(No culling)","4" };
 		ImGui::Combo("Rasterizer_states", &Rasterizer_index, rasterizer_names, IM_ARRAYSIZE(rasterizer_names));
+		ImGui::SliderFloat("Luminance Threshold", &luminance_threshold, 0.0f, 1.0f);
+		ImGui::SliderFloat("Gaussian Sigma", &gaussian_sigma, 0.1f, 10.0f);
+		ImGui::SliderFloat("Bloom Intensity", &bloom_intensity, 0.0f, 5.0f);
+		ImGui::SliderFloat("Exposure", &exposure, 0.1f, 5.0f);
 		ImGui::Separator();
 	}
 
@@ -418,30 +432,42 @@ void framework::update(float elapsed_time/*Elapsed seconds from last frame*/)
 void framework::render(float elapsed_time/*Elapsed seconds from last frame*/)
 {
 	// これより上には書かない
+	ID3D11RenderTargetView* null_render_target_views[D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT]{};
+	immediate_context->OMSetRenderTargets(_countof(null_render_target_views), null_render_target_views, 0);
+	ID3D11ShaderResourceView* null_shader_resource_views[D3D11_COMMONSHADER_INPUT_RESOURCE_SLOT_COUNT]{};
+	immediate_context->VSSetShaderResources(0, _countof(null_shader_resource_views), null_shader_resource_views);
+	immediate_context->PSSetShaderResources(0, _countof(null_shader_resource_views), null_shader_resource_views);
+
 	HRESULT hr{ S_OK };
 
-	FLOAT color[]{ 0.2f,0.2f,0.2f,1.0f }; // 画面をクリアする
-	immediate_context->ClearRenderTargetView(render_target_view.Get(), color);
-	immediate_context->ClearDepthStencilView(depth_stencil_view.Get(),
-		D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
+	// framebuffer::activate が、復帰先となるメイン画面の描画先を保存できるようにする。
 	immediate_context->OMSetRenderTargets(1, render_target_view.GetAddressOf(), depth_stencil_view.Get());
+	framebuffers[0]->clear(immediate_context.Get());
+	framebuffers[0]->activate(immediate_context.Get());
 
 	// framework クラスの render メンバ関数でサンプラーステートオブジェクトをバインドする
 	// ImGuiで選択された番号(sampler_index)のサンプラーを、スロット0にバインドする
-	immediate_context->PSSetSamplers(0, 1, sampler_states[Sampler_index].GetAddressOf());
-	// skinned_mesh_ps.hlsl は sampler_states[2]（スロット2）を参照する
-	immediate_context->PSSetSamplers(2, 1, sampler_states[Sampler_index].GetAddressOf());
+	ID3D11SamplerState* material_samplers[3]{
+		// s0/s2 are the user-selected texture filter; s1 is required by the normal map.
+		sampler_states[Sampler_index].Get(), sampler_states[1].Get(), sampler_states[Sampler_index].Get()
+	};
+	immediate_context->PSSetSamplers(0, 3, material_samplers);
 
 	// ここからゲームの背景の描画(つまり2Dの描画)を行っている
 	// なので2Dの深度の設定を行う
 	// spriteオブジェクト描画の直前で深度ステンシルステートオブジェクトを設定する(初期値 Test:OFF/Write:OFF)
-	immediate_context->OMSetDepthStencilState(depth_stencil_states[Depth_index].Get(), 0);
+	immediate_context->OMSetDepthStencilState(depth_stencil_states[3].Get(), 0);
 
 	// spriteオブジェクト描画の直前でブレンディングステートオブジェクトを設定する
-	immediate_context->OMSetBlendState(blend_states[Blend_index].Get(), nullptr, 0xFFFFFFFF);
+	immediate_context->OMSetBlendState(blend_states[0].Get(), nullptr, 0xFFFFFFFF);
 
 	// ラスタライザステートの切り替え(2D)
-	immediate_context->RSSetState(rasterizer_states[5].Get());
+	immediate_context->RSSetState(rasterizer_states[3].Get());
+
+	// UNIT32: スプライトを背景として画面全体に描画する。
+	sprite_batches[0]->begin(immediate_context.Get());
+	sprite_batches[0]->render(immediate_context.Get(), 0, 0, 1280, 720);
+	sprite_batches[0]->end(immediate_context.Get());
 
 	// renderメンバ関数でのspriteオブジェクトの描画方法を変更する
 	/*sprites[0]->render(immediate_context.Get(), 
@@ -766,6 +792,42 @@ void framework::render(float elapsed_time/*Elapsed seconds from last frame*/)
 		{ skinned_mesh_color[0], skinned_mesh_color[1], skinned_mesh_color[2], skinned_mesh_color[3] },
 		&keyframe
 	);
+
+	framebuffers[0]->deactivate(immediate_context.Get());
+
+	// オフスクリーンバッファの内容を画面に描画する。
+	immediate_context->OMSetDepthStencilState(depth_stencil_states[3].Get(), 0);
+	immediate_context->RSSetState(rasterizer_states[3].Get());
+
+#if 0
+	bit_block_transfer->blit(immediate_context.Get(),
+		framebuffers[0]->shader_resource_views[0].GetAddressOf(), 0, 1);
+#endif
+
+	post_process_constants post_process_data{};
+	post_process_data.luminance_threshold = luminance_threshold;
+	post_process_data.gaussian_sigma = gaussian_sigma;
+	post_process_data.bloom_intensity = bloom_intensity;
+	post_process_data.exposure = exposure;
+	immediate_context->UpdateSubresource(constant_buffers[1].Get(), 0, 0, &post_process_data, 0, 0);
+	immediate_context->PSSetConstantBuffers(0, 1, constant_buffers[1].GetAddressOf());
+
+	framebuffers[1]->clear(immediate_context.Get());
+	framebuffers[1]->activate(immediate_context.Get());
+	bit_block_transfer->blit(immediate_context.Get(),
+		framebuffers[0]->shader_resource_views[0].GetAddressOf(), 0, 1, pixel_shaders[0].Get());
+	framebuffers[1]->deactivate(immediate_context.Get());
+
+#if 0
+	bit_block_transfer->blit(immediate_context.Get(),
+		framebuffers[1]->shader_resource_views[0].GetAddressOf(), 0, 1);
+#endif
+
+	ID3D11ShaderResourceView* shader_resource_views[2]
+	{
+		framebuffers[0]->shader_resource_views[0].Get(), framebuffers[1]->shader_resource_views[0].Get()
+	};
+	bit_block_transfer->blit(immediate_context.Get(), shader_resource_views, 0, 2, pixel_shaders[1].Get());
 
 #ifdef USE_IMGUI
 	ImGui::Render();
