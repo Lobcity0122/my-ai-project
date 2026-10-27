@@ -7,6 +7,7 @@
 #include <stack>
 #include <functional>
 #include <filesystem>
+#include <cstring>
 
 bool null_load_image_data(tinygltf::Image*, const int, std::string*, std::string*,
     int, int, const unsigned char*, int, void*)
@@ -43,6 +44,7 @@ gltf_model::gltf_model(ID3D11Device* device, const std::string& filename) : file
     fetch_meshes(device, gltf_model);
     fetch_materials(device, gltf_model);
     fetch_textures(device, gltf_model);
+    fetch_animations(gltf_model);
 
     D3D11_INPUT_ELEMENT_DESC input_element_desc[]
     {
@@ -63,6 +65,12 @@ gltf_model::gltf_model(ID3D11Device* device, const std::string& filename) : file
     buffer_desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
     HRESULT hr;
     hr = device->CreateBuffer(&buffer_desc, nullptr, primitive_cbuffer.ReleaseAndGetAddressOf());
+    _ASSERT_EXPR(SUCCEEDED(hr), hr_trace(hr));
+
+    buffer_desc.ByteWidth = sizeof(primitive_joint_constants);
+    buffer_desc.Usage = D3D11_USAGE_DEFAULT;
+    buffer_desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+    hr = device->CreateBuffer(&buffer_desc, nullptr, primitive_joint_cbuffer.ReleaseAndGetAddressOf());
     _ASSERT_EXPR(SUCCEEDED(hr), hr_trace(hr));
 }
 
@@ -364,9 +372,178 @@ void gltf_model::fetch_textures(ID3D11Device* device, const tinygltf::Model& glt
     }
 }
 
-void gltf_model::render(ID3D11DeviceContext* immediate_context, const DirectX::XMFLOAT4X4& world)
+void gltf_model::fetch_animations(const tinygltf::Model& gltf_model)
+{
+    using namespace std;
+    using namespace tinygltf;
+    using namespace DirectX;
+
+    for (vector<Skin>::const_reference transmission_skin : gltf_model.skins)
+    {
+        skin& skin{ skins.emplace_back() };
+        const Accessor& gltf_accessor{ gltf_model.accessors.at(transmission_skin.inverseBindMatrices) };
+        const BufferView& gltf_buffer_view{ gltf_model.bufferViews.at(gltf_accessor.bufferView) };
+        skin.inverse_bind_matrices.resize(gltf_accessor.count);
+        memcpy(skin.inverse_bind_matrices.data(), gltf_model.buffers.at(gltf_buffer_view.buffer).data.data() +
+            gltf_buffer_view.byteOffset + gltf_accessor.byteOffset, gltf_accessor.count * sizeof(XMFLOAT4X4));
+        skin.joints = transmission_skin.joints;
+    }
+
+    for (vector<Animation>::const_reference gltf_animation : gltf_model.animations)
+    {
+        animation& animation{ animations.emplace_back() };
+        animation.name = gltf_animation.name;
+        for (vector<AnimationSampler>::const_reference gltf_sampler : gltf_animation.samplers)
+        {
+            animation::sampler& sampler{ animation.samplers.emplace_back() };
+            sampler.input = gltf_sampler.input;
+            sampler.output = gltf_sampler.output;
+            sampler.interpolation = gltf_sampler.interpolation;
+            const Accessor& gltf_accessor{ gltf_model.accessors.at(gltf_sampler.input) };
+            const BufferView& gltf_buffer_view{ gltf_model.bufferViews.at(gltf_accessor.bufferView) };
+            const pair<unordered_map<int, vector<float>>::iterator, bool>& timelines{
+                animation.timelines.emplace(gltf_sampler.input, gltf_accessor.count) };
+            if (timelines.second)
+            {
+                memcpy(timelines.first->second.data(), gltf_model.buffers.at(gltf_buffer_view.buffer).data.data() +
+                    gltf_buffer_view.byteOffset + gltf_accessor.byteOffset, gltf_accessor.count * sizeof(FLOAT));
+            }
+        }
+        for (vector<AnimationChannel>::const_reference gltf_channel : gltf_animation.channels)
+        {
+            animation::channel& channel{ animation.channels.emplace_back() };
+            channel.sampler = gltf_channel.sampler;
+            channel.target_node = gltf_channel.target_node;
+            channel.target_path = gltf_channel.target_path;
+            const AnimationSampler& gltf_sampler{ gltf_animation.samplers.at(gltf_channel.sampler) };
+            const Accessor& gltf_accessor{ gltf_model.accessors.at(gltf_sampler.output) };
+            const BufferView& gltf_buffer_view{ gltf_model.bufferViews.at(gltf_accessor.bufferView) };
+            if (gltf_channel.target_path == "scale")
+            {
+                const pair<unordered_map<int, vector<XMFLOAT3>>::iterator, bool>& scales{
+                    animation.scales.emplace(gltf_sampler.output, gltf_accessor.count) };
+                if (scales.second)
+                {
+                    memcpy(scales.first->second.data(), gltf_model.buffers.at(gltf_buffer_view.buffer).data.data() +
+                        gltf_buffer_view.byteOffset + gltf_accessor.byteOffset, gltf_accessor.count * sizeof(XMFLOAT3));
+                }
+            }
+            else if (gltf_channel.target_path == "rotation")
+            {
+                const pair<unordered_map<int, vector<XMFLOAT4>>::iterator, bool>& rotations{
+                    animation.rotations.emplace(gltf_sampler.output, gltf_accessor.count) };
+                if (rotations.second)
+                {
+                    memcpy(rotations.first->second.data(), gltf_model.buffers.at(gltf_buffer_view.buffer).data.data() +
+                        gltf_buffer_view.byteOffset + gltf_accessor.byteOffset, gltf_accessor.count * sizeof(XMFLOAT4));
+                }
+            }
+            else if (gltf_channel.target_path == "translation")
+            {
+                const pair<unordered_map<int, vector<XMFLOAT3>>::iterator, bool>& translations{
+                    animation.translations.emplace(gltf_sampler.output, gltf_accessor.count) };
+                if (translations.second)
+                {
+                    memcpy(translations.first->second.data(), gltf_model.buffers.at(gltf_buffer_view.buffer).data.data() +
+                        gltf_buffer_view.byteOffset + gltf_accessor.byteOffset, gltf_accessor.count * sizeof(XMFLOAT3));
+                }
+            }
+        }
+    }
+    for (decltype(animations)::reference animation : animations)
+    {
+        for (decltype(animation.timelines)::reference timelines : animation.timelines)
+        {
+            if (!timelines.second.empty())
+            {
+                animation.duration = std::max<float>(animation.duration, timelines.second.back());
+            }
+        }
+    }
+}
+
+void gltf_model::animate(size_t animation_index, float time, std::vector<node>& animated_nodes)
+{
+    using namespace std;
+    using namespace DirectX;
+    function<size_t(const vector<float>&, float, float&)> indexof{
+        [](const vector<float>& timelines, float time, float& interpolation_factor)->size_t
+        {
+            const size_t keyframe_count{ timelines.size() };
+            if (keyframe_count == 1)
+            {
+                interpolation_factor = 0.0f;
+                return 0;
+            }
+            if (time >= timelines.at(keyframe_count - 1))
+            {
+                interpolation_factor = 1.0f;
+                return keyframe_count - 2;
+            }
+            else if (time <= timelines.at(0))
+            {
+                interpolation_factor = 0.0f;
+                return 0;
+            }
+            size_t keyframe_index{ 0 };
+            for (size_t time_index = 1; time_index < keyframe_count; ++time_index)
+            {
+                if (time < timelines.at(time_index))
+                {
+                    keyframe_index = max<size_t>(0LL, time_index - 1);
+                    break;
+                }
+            }
+            interpolation_factor = (time - timelines.at(keyframe_index)) /
+                (timelines.at(keyframe_index + 1) - timelines.at(keyframe_index));
+            return keyframe_index;
+        } };
+
+    if (animations.size() > 0)
+    {
+        const animation& animation{ animations.at(animation_index) };
+        for (vector<animation::channel>::const_reference channel : animation.channels)
+        {
+            const animation::sampler& sampler{ animation.samplers.at(channel.sampler) };
+            const vector<float>& timeline{ animation.timelines.at(sampler.input) };
+            if (timeline.size() == 0)
+            {
+                continue;
+            }
+            float interpolation_factor{};
+            size_t keyframe_index{ indexof(timeline, time, interpolation_factor) };
+            size_t next_keyframe_index{ timeline.size() == 1 ? keyframe_index : keyframe_index + 1 };
+            if (channel.target_path == "scale")
+            {
+                const vector<XMFLOAT3>& scales{ animation.scales.at(sampler.output) };
+                XMStoreFloat3(&animated_nodes.at(channel.target_node).scale,
+                    XMVectorLerp(XMLoadFloat3(&scales.at(keyframe_index)),
+                        XMLoadFloat3(&scales.at(next_keyframe_index)), interpolation_factor));
+            }
+            else if (channel.target_path == "rotation")
+            {
+                const vector<XMFLOAT4>& rotations{ animation.rotations.at(sampler.output) };
+                XMStoreFloat4(&animated_nodes.at(channel.target_node).rotation,
+                    XMQuaternionNormalize(XMQuaternionSlerp(XMLoadFloat4(&rotations.at(keyframe_index)),
+                        XMLoadFloat4(&rotations.at(next_keyframe_index)), interpolation_factor)));
+            }
+            else if (channel.target_path == "translation")
+            {
+                const vector<XMFLOAT3>& translations{ animation.translations.at(sampler.output) };
+                XMStoreFloat3(&animated_nodes.at(channel.target_node).translation,
+                    XMVectorLerp(XMLoadFloat3(&translations.at(keyframe_index)),
+                        XMLoadFloat3(&translations.at(next_keyframe_index)), interpolation_factor));
+            }
+        }
+        cumulate_transforms(animated_nodes);
+    }
+}
+
+void gltf_model::render(ID3D11DeviceContext* immediate_context, const DirectX::XMFLOAT4X4& world,
+    const std::vector<node>& animated_nodes)
 {
     using namespace DirectX;
+    const std::vector<node>& nodes{ animated_nodes.size() > 0 ? animated_nodes : gltf_model::nodes };
     immediate_context->PSSetShaderResources(0, 1, material_resource_view.GetAddressOf());
     immediate_context->VSSetShader(vertex_shader.Get(), nullptr, 0);
     immediate_context->PSSetShader(pixel_shader.Get(), nullptr, 0);
@@ -378,6 +555,21 @@ void gltf_model::render(ID3D11DeviceContext* immediate_context, const DirectX::X
         const node& node{ nodes.at(node_index) };
         if (node.mesh > -1)
         {
+            if (node.skin > -1)
+            {
+                const skin& skin{ skins.at(node.skin) };
+                _ASSERT_EXPR(skin.joints.size() <= PRIMITIVE_MAX_JOINTS, L"Too many joints for the constant buffer.");
+                primitive_joint_constants primitive_joint_data{};
+                for (size_t joint_index = 0; joint_index < skin.joints.size(); ++joint_index)
+                {
+                    XMStoreFloat4x4(&primitive_joint_data.matrices[joint_index],
+                        XMLoadFloat4x4(&skin.inverse_bind_matrices.at(joint_index)) *
+                        XMLoadFloat4x4(&nodes.at(skin.joints.at(joint_index)).global_transform) *
+                        XMMatrixInverse(nullptr, XMLoadFloat4x4(&node.global_transform)));
+                }
+                immediate_context->UpdateSubresource(primitive_joint_cbuffer.Get(), 0, 0, &primitive_joint_data, 0, 0);
+                immediate_context->VSSetConstantBuffers(2, 1, primitive_joint_cbuffer.GetAddressOf());
+            }
             const mesh& mesh{ meshes.at(node.mesh) };
             for (std::vector<mesh::primitive>::const_reference primitive : mesh.primitives)
             {

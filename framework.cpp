@@ -303,7 +303,7 @@ bool framework::initialize()
 	bit_block_transfer = std::make_unique<fullscreen_quad>(device.Get());
 
 	gltf_models[0] = std::make_unique<gltf_model>(device.Get(),
-		"..\\glTF-Sample-Models-master\\2.0\\DamagedHelmet\\glTF\\DamagedHelmet.gltf");
+		"..\\glTF-Sample-Models-master\\2.0\\CesiumMan\\glTF\\CesiumMan.gltf");
 
 	return true;
 }
@@ -819,7 +819,7 @@ void framework::render(float elapsed_time/*Elapsed seconds from last frame*/)
 	);
 #endif
 
-	// DamagedHelmet is displayed at its native size, with an X reflection for left-handed rendering.
+	// glTF is displayed at its native size, with an X reflection for left-handed rendering.
 	DirectX::XMMATRIX gltf_S{ DirectX::XMMatrixScaling(
 		gltf_model_scale.x, gltf_model_scale.y, gltf_model_scale.z) };
 	DirectX::XMMATRIX gltf_R{ DirectX::XMMatrixRotationRollPitchYaw(
@@ -834,7 +834,14 @@ void framework::render(float elapsed_time/*Elapsed seconds from last frame*/)
 	ID3D11SamplerState* gltf_samplers[]{ gltf_sampler_states[Sampler_index].Get(),
 		gltf_sampler_states[1].Get(), gltf_sampler_states[Sampler_index].Get() };
 	immediate_context->PSSetSamplers(0, _countof(gltf_samplers), gltf_samplers);
-	gltf_models[0]->render(immediate_context.Get(), gltf_world);
+	static std::vector<gltf_model::node> animated_nodes{ gltf_models[0]->nodes };
+	static float time{ 0 };
+	gltf_models[0]->animate(0, time += elapsed_time, animated_nodes);
+	if (gltf_models[0]->animations.at(0).duration < time)
+	{
+		time = 0;
+	}
+	gltf_models[0]->render(immediate_context.Get(), gltf_world, animated_nodes);
 	// Post-processing needs the original black border instead of repeated UVs.
 	immediate_context->PSSetSamplers(0, _countof(material_samplers), material_samplers);
 
