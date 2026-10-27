@@ -9,9 +9,9 @@
 //
 //   row_major float4x4 world;          // Offset:    0 Size:    64 [unused]
 //   int material;                      // Offset:   64 Size:     4
-//   bool has_tangent;                  // Offset:   68 Size:     4 [unused]
+//   bool has_tangent;                  // Offset:   68 Size:     4
 //   int skin;                          // Offset:   72 Size:     4 [unused]
-//   int pad;                           // Offset:   76 Size:     4 [unused]
+//   float brightness;                  // Offset:   76 Size:     4
 //
 // }
 //
@@ -20,7 +20,7 @@
 //
 //   row_major float4x4 view_projection;// Offset:    0 Size:    64 [unused]
 //   float4 light_direction;            // Offset:   64 Size:    16
-//   float4 camera_position;            // Offset:   80 Size:    16 [unused]
+//   float4 camera_position;            // Offset:   80 Size:    16
 //
 // }
 //
@@ -95,10 +95,14 @@
 //
 // Name                                 Type  Format         Dim      HLSL Bind  Count
 // ------------------------------ ---------- ------- ----------- -------------- ------
+// sampler_states[1]                 sampler      NA          NA             s1      1 
 // sampler_states[2]                 sampler      NA          NA             s2      1 
 // materials                         texture  struct         r/o             t0      1 
 // material_textures[0]              texture  float4          2d             t1      1 
+// material_textures[1]              texture  float4          2d             t2      1 
+// material_textures[2]              texture  float4          2d             t3      1 
 // material_textures[3]              texture  float4          2d             t4      1 
+// material_textures[4]              texture  float4          2d             t5      1 
 // PRIMITIVE_CONSTANT_BUFFER         cbuffer      NA          NA            cb0      1 
 // SCENE_CONSTANT_BUFFER             cbuffer      NA          NA            cb1      1 
 //
@@ -109,9 +113,9 @@
 // Name                 Index   Mask Register SysValue  Format   Used
 // -------------------- ----- ------ -------- -------- ------- ------
 // SV_POSITION              0   xyzw        0      POS   float       
-// POSITION                 0   xyzw        1     NONE   float       
+// POSITION                 0   xyzw        1     NONE   float   xyz 
 // NORMAL                   0   xyzw        2     NONE   float   xyz 
-// TANGENT                  0   xyzw        3     NONE   float       
+// TANGENT                  0   xyzw        3     NONE   float   xyzw
 // TEXCOORD                 0   xy          4     NONE   float   xy  
 //
 //
@@ -124,15 +128,21 @@
 ps_5_0
 dcl_globalFlags refactoringAllowed | skipOptimization
 dcl_constantbuffer CB0[5], immediateIndexed
-dcl_constantbuffer CB1[5], immediateIndexed
+dcl_constantbuffer CB1[6], immediateIndexed
+dcl_sampler s1, mode_default
 dcl_sampler s2, mode_default
 dcl_resource_structured t0, 96
 dcl_resource_texture2d (float,float,float,float) t1
+dcl_resource_texture2d (float,float,float,float) t2
+dcl_resource_texture2d (float,float,float,float) t3
 dcl_resource_texture2d (float,float,float,float) t4
+dcl_resource_texture2d (float,float,float,float) t5
+dcl_input_ps linear v1.xyz
 dcl_input_ps linear v2.xyz
+dcl_input_ps linear v3.xyzw
 dcl_input_ps linear v4.xy
 dcl_output o0.xyzw
-dcl_temps 4
+dcl_temps 12
 //
 // Initial variable locations:
 //   v0.x <- pin.position.x; v0.y <- pin.position.y; v0.z <- pin.position.z; v0.w <- pin.position.w; 
@@ -142,48 +152,441 @@ dcl_temps 4
 //   v4.x <- pin.texcoord.x; v4.y <- pin.texcoord.y; 
 //   o0.x <- <main return value>.x; o0.y <- <main return value>.y; o0.z <- <main return value>.z; o0.w <- <main return value>.w
 //
-#line 55 "C:\Users\2250198\OneDrive - yamaguchigakuen\チEクトップ\x3dgp.00\gltf_model_ps.hlsl"
-mov r0.x, cb0[4].x
-ld_structured_indexable(structured_buffer, stride=96)(mixed,mixed,mixed,mixed) r1.x, r0.x, l(0), t0.xxxx  // r1.x <- m.emissive_factor.x
-ld_structured_indexable(structured_buffer, stride=96)(mixed,mixed,mixed,mixed) r1.y, r0.x, l(4), t0.xxxx  // r1.y <- m.emissive_factor.y
-ld_structured_indexable(structured_buffer, stride=96)(mixed,mixed,mixed,mixed) r1.z, r0.x, l(8), t0.xxxx  // r1.z <- m.emissive_factor.z
-ld_structured_indexable(structured_buffer, stride=96)(mixed,mixed,mixed,mixed) r2.x, r0.x, l(24), t0.xxxx  // r2.x <- m.pbr_metallic_roughness.basecolor_factor.x
-ld_structured_indexable(structured_buffer, stride=96)(mixed,mixed,mixed,mixed) r2.y, r0.x, l(28), t0.xxxx  // r2.y <- m.pbr_metallic_roughness.basecolor_factor.y
-ld_structured_indexable(structured_buffer, stride=96)(mixed,mixed,mixed,mixed) r2.z, r0.x, l(32), t0.xxxx  // r2.z <- m.pbr_metallic_roughness.basecolor_factor.z
-ld_structured_indexable(structured_buffer, stride=96)(mixed,mixed,mixed,mixed) r2.w, r0.x, l(36), t0.xxxx  // r2.w <- m.pbr_metallic_roughness.basecolor_factor.w
-ld_structured_indexable(structured_buffer, stride=96)(mixed,mixed,mixed,mixed) r0.y, r0.x, l(40), t0.xxxx  // r0.y <- m.pbr_metallic_roughness.basecolor_texture.index
-ld_structured_indexable(structured_buffer, stride=96)(mixed,mixed,mixed,mixed) r0.x, r0.x, l(88), t0.xxxx  // r0.x <- m.emissive_texture.index
+#line 57 "C:\Users\2250198\OneDrive - yamaguchigakuen\チEクトップ\x3dgp.00\gltf_model_ps.hlsl"
+mov r0.x, l(2.200000)  // r0.x <- GAMMA
 
-#line 56
-ilt r0.y, l(-1), r0.y
-sample_indexable(texture2d)(float,float,float,float) r3.xyzw, v4.xyxx, t1.xyzw, s2
-movc r2.xyzw, r0.yyyy, r3.xyzw, r2.xyzw  // r2.x <- basecolor.x; r2.y <- basecolor.y; r2.z <- basecolor.z; r2.w <- basecolor.w
+#line 58
+mov r0.y, cb0[4].x
+ld_structured_indexable(structured_buffer, stride=96)(mixed,mixed,mixed,mixed) r1.x, r0.y, l(0), t0.xxxx  // r1.x <- m.emissive_factor.x
+ld_structured_indexable(structured_buffer, stride=96)(mixed,mixed,mixed,mixed) r1.y, r0.y, l(4), t0.xxxx  // r1.y <- m.emissive_factor.y
+ld_structured_indexable(structured_buffer, stride=96)(mixed,mixed,mixed,mixed) r1.z, r0.y, l(8), t0.xxxx  // r1.z <- m.emissive_factor.z
+ld_structured_indexable(structured_buffer, stride=96)(mixed,mixed,mixed,mixed) r2.x, r0.y, l(24), t0.xxxx  // r2.x <- m.pbr_metallic_roughness.basecolor_factor.x
+ld_structured_indexable(structured_buffer, stride=96)(mixed,mixed,mixed,mixed) r2.y, r0.y, l(28), t0.xxxx  // r2.y <- m.pbr_metallic_roughness.basecolor_factor.y
+ld_structured_indexable(structured_buffer, stride=96)(mixed,mixed,mixed,mixed) r2.z, r0.y, l(32), t0.xxxx  // r2.z <- m.pbr_metallic_roughness.basecolor_factor.z
+ld_structured_indexable(structured_buffer, stride=96)(mixed,mixed,mixed,mixed) r2.w, r0.y, l(36), t0.xxxx  // r2.w <- m.pbr_metallic_roughness.basecolor_factor.w
+ld_structured_indexable(structured_buffer, stride=96)(mixed,mixed,mixed,mixed) r0.z, r0.y, l(40), t0.xxxx  // r0.z <- m.pbr_metallic_roughness.basecolor_texture.index
+ld_structured_indexable(structured_buffer, stride=96)(mixed,mixed,mixed,mixed) r0.w, r0.y, l(48), t0.xxxx  // r0.w <- m.pbr_metallic_roughness.metallic_factor
+ld_structured_indexable(structured_buffer, stride=96)(mixed,mixed,mixed,mixed) r1.w, r0.y, l(52), t0.xxxx  // r1.w <- m.pbr_metallic_roughness.roughness_factor
+ld_structured_indexable(structured_buffer, stride=96)(mixed,mixed,mixed,mixed) r3.x, r0.y, l(56), t0.xxxx  // r3.x <- m.pbr_metallic_roughness.metallic_roughness_texture.index
+ld_structured_indexable(structured_buffer, stride=96)(mixed,mixed,mixed,mixed) r3.y, r0.y, l(64), t0.xxxx  // r3.y <- m.normal_texture.index
+ld_structured_indexable(structured_buffer, stride=96)(mixed,mixed,mixed,mixed) r4.y, r0.y, l(72), t0.xxxx  // r4.y <- m.normal_texture.scale
+ld_structured_indexable(structured_buffer, stride=96)(mixed,mixed,mixed,mixed) r3.z, r0.y, l(76), t0.xxxx  // r3.z <- m.occlusion_texture.index
+ld_structured_indexable(structured_buffer, stride=96)(mixed,mixed,mixed,mixed) r3.w, r0.y, l(84), t0.xxxx  // r3.w <- m.occlusion_texture.strength
+ld_structured_indexable(structured_buffer, stride=96)(mixed,mixed,mixed,mixed) r0.y, r0.y, l(88), t0.xxxx  // r0.y <- m.emissive_texture.index
 
-#line 59
-ilt r0.x, l(-1), r0.x
-sample_indexable(texture2d)(float,float,float,float) r0.yzw, v4.xyxx, t4.wxyz, s2
-movc r0.xyz, r0.xxxx, r0.yzwy, r1.xyzx  // r0.x <- emmisive.x; r0.y <- emmisive.y; r0.z <- emmisive.z
+#line 60
+mov r2.xyzw, r2.xyzw  // r2.x <- basecolor_factor.x; r2.y <- basecolor_factor.y; r2.z <- basecolor_factor.z; r2.w <- basecolor_factor.w
+
+#line 61
+mov r0.z, r0.z  // r0.z <- basecolor_texture
 
 #line 62
-dp3 r0.w, v2.xyzx, v2.xyzx
-rsq r0.w, r0.w
-mul r1.xyz, r0.wwww, v2.xyzx  // r1.x <- N.x; r1.y <- N.y; r1.z <- N.z
-
-#line 63
-mov r3.xyz, -cb1[4].xyzx
-dp3 r0.w, r3.xyzx, r3.xyzx
-rsq r0.w, r0.w
-mul r3.xyz, r0.wwww, r3.xyzx  // r3.x <- L.x; r3.y <- L.y; r3.z <- L.z
+ilt r0.z, l(-1), r0.z
+if_nz r0.z
 
 #line 64
-itof r0.w, l(0)
-dp3 r1.x, r1.xyzx, r3.xyzx
-max r0.w, r0.w, r1.x
-mul r1.xyz, r2.xyzx, r0.wwww
-add r0.xyz, r0.xyzx, r1.xyzx  // r0.x <- color.x; r0.y <- color.y; r0.z <- color.z
+  sample_indexable(texture2d)(float,float,float,float) r5.xyzw, v4.xyxx, t1.xyzw, s2  // r5.x <- sampled.x; r5.y <- sampled.y; r5.z <- sampled.z; r5.w <- sampled.w
 
 #line 65
-mov o0.xyz, r0.xyzx
+  log r6.xyz, r5.xyzx
+  mul r6.xyz, r0.xxxx, r6.xyzx
+  exp r5.xyz, r6.xyzx
+
+#line 66
+  mul r2.xyzw, r2.xyzw, r5.xyzw
+
+#line 67
+endif 
+
+#line 69
+mov r1.xyz, r1.xyzx  // r1.x <- emmisive_factor.x; r1.y <- emmisive_factor.y; r1.z <- emmisive_factor.z
+
+#line 70
+mov r0.y, r0.y  // r0.y <- emissive_texture
+
+#line 71
+ilt r0.y, l(-1), r0.y
+if_nz r0.y
+
+#line 73
+  sample_indexable(texture2d)(float,float,float,float) r5.xyz, v4.xyxx, t4.xyzw, s2
+  mov r5.xyz, r5.xyzx  // r5.x <- sampled.x; r5.y <- sampled.y; r5.z <- sampled.z
+
+#line 74
+  log r5.xyz, r5.xyzx
+  mul r0.xyz, r0.xxxx, r5.xyzx
+  exp r0.xyz, r0.xyzx  // r0.x <- sampled.x; r0.y <- sampled.y; r0.z <- sampled.z
+
+#line 75
+  mul r1.xyz, r0.xyzx, r1.xyzx
+
+#line 76
+endif 
+
+#line 78
+mov r1.w, r1.w  // r1.w <- roughness_factor
+
+#line 79
+mov r0.w, r0.w  // r0.w <- metallic_factor
+
+#line 80
+mov r3.x, r3.x  // r3.x <- metallic_roughness_texture
+
+#line 81
+ilt r0.x, l(-1), r3.x
+if_nz r0.x
+
+#line 83
+  sample_indexable(texture2d)(float,float,float,float) r0.xy, v4.xyxx, t2.yzxw, s1  // r0.x <- sampled.y; r0.y <- sampled.z
+
+#line 84
+  mul r1.w, r0.x, r1.w
+
+#line 85
+  mul r0.w, r0.y, r0.w
+
+#line 86
+endif 
+
+#line 88
+mov r0.x, l(1.000000)  // r0.x <- occlusion_factor
+
+#line 89
+mov r3.z, r3.z  // r3.z <- occlusion_texture
+
+#line 90
+ilt r0.y, l(-1), r3.z
+if_nz r0.y
+
+#line 92
+  sample_indexable(texture2d)(float,float,float,float) r0.y, v4.xyxx, t5.yxzw, s1  // r0.y <- sampled.x
+
+#line 93
+  mul r0.x, r0.y, r0.x
+
+#line 94
+endif 
+
+#line 95
+mov r3.w, r3.w  // r3.w <- occlusion_strength
+
+#line 97
+mov r5.xyz, l(-0.040000,-0.040000,-0.040000,-0.000000)
+add r5.xyz, r2.xyzx, r5.xyzx
+mul r5.xyz, r0.wwww, r5.xyzx
+add r5.xyz, r5.xyzx, l(0.040000, 0.040000, 0.040000, 0.000000)  // r5.x <- f0.x; r5.y <- f0.y; r5.z <- f0.z
+
+#line 98
+mov r6.xyz, l(1.000000,1.000000,1.000000,0)  // r6.x <- f90.x; r6.y <- f90.y; r6.z <- f90.z
+
+#line 99
+mul r0.y, r1.w, r1.w  // r0.y <- alpha_roughness
+
+#line 100
+mov r7.xyz, -r2.xyzx
+add r7.xyz, r7.xyzx, l(0.000000, 0.000000, 0.000000, 0.000000)
+mul r7.xyz, r0.wwww, r7.xyzx
+add r2.xyz, r2.xyzx, r7.xyzx  // r2.x <- c_diff.x; r2.y <- c_diff.y; r2.z <- c_diff.z
+
+#line 103
+mov r7.xyz, -v1.xyzx
+add r7.xyz, r7.xyzx, cb1[5].xyzx
+dp3 r0.z, r7.xyzx, r7.xyzx
+rsq r0.z, r0.z
+mul r7.xyz, r0.zzzz, r7.xyzx  // r7.x <- V.x; r7.y <- V.y; r7.z <- V.z
+
+#line 104
+dp3 r0.z, v2.xyzx, v2.xyzx
+rsq r0.z, r0.z
+mul r8.xyz, r0.zzzz, v2.xyzx  // r8.x <- N.x; r8.y <- N.y; r8.z <- N.z
+
+#line 105
+ine r0.z, l(0, 0, 0, 0), cb0[4].y
+dp3 r0.w, v3.xyzx, v3.xyzx
+rsq r0.w, r0.w
+mul r9.xyz, r0.wwww, v3.xyzx
+itof r10.xyz, l(1, 0, 0, 0)
+movc r9.xyz, r0.zzzz, r9.xyzx, r10.xyzx  // r9.x <- T.x; r9.y <- T.y; r9.z <- T.z
+
+#line 106
+ine r0.z, l(0, 0, 0, 0), cb0[4].y
+movc r0.z, r0.z, v3.w, l(1.000000)  // r0.z <- sigma
+
+#line 107
+dp3 r0.w, r8.xyzx, r9.xyzx
+mul r10.xyz, r0.wwww, r8.xyzx
+mov r10.xyz, -r10.xyzx
+add r9.xyz, r9.xyzx, r10.xyzx
+dp3 r0.w, r9.xyzx, r9.xyzx
+rsq r0.w, r0.w
+mul r9.xyz, r0.wwww, r9.xyzx  // r9.x <- T.x; r9.y <- T.y; r9.z <- T.z
+
+#line 108
+mul r10.xyz, r8.yzxy, r9.zxyz
+mul r11.xyz, r8.zxyz, r9.yzxy
+mov r11.xyz, -r11.xyzx
+add r10.xyz, r10.xyzx, r11.xyzx
+mul r10.xyz, r0.zzzz, r10.xyzx
+dp3 r0.z, r10.xyzx, r10.xyzx
+rsq r0.z, r0.z
+mul r10.xyz, r0.zzzz, r10.xyzx  // r10.x <- B.x; r10.y <- B.y; r10.z <- B.z
+
+#line 110
+mov r3.y, r3.y  // r3.y <- normal_texture
+
+#line 111
+ilt r0.z, l(-1), r3.y
+if_nz r0.z
+
+#line 113
+  sample_indexable(texture2d)(float,float,float,float) r3.xyz, v4.xyxx, t3.xyzw, s1  // r3.x <- sampled.x; r3.y <- sampled.y; r3.z <- sampled.z
+
+#line 114
+  mov r3.xyz, r3.xyzx  // r3.x <- normal_factor.x; r3.y <- normal_factor.y; r3.z <- normal_factor.z
+
+#line 115
+  mul r3.xyz, r3.xyzx, l(2.000000, 2.000000, 2.000000, 0.000000)
+  mov r11.xyz, l(-1.000000,-1.000000,-1.000000,-0.000000)
+  add r3.xyz, r3.xyzx, r11.xyzx  // r3.x <- normal_factor.x; r3.y <- normal_factor.y; r3.z <- normal_factor.z
+
+#line 116
+  mov r4.z, l(1.000000)
+  mul r3.xyz, r3.xyzx, r4.yyzy
+  dp3 r0.z, r3.xyzx, r3.xyzx
+  rsq r0.z, r0.z
+  mul r3.xyz, r0.zzzz, r3.xyzx  // r3.x <- normal_factor.x; r3.y <- normal_factor.y; r3.z <- normal_factor.z
+
+#line 117
+  mul r4.xyz, r9.xyzx, r3.xxxx
+  mul r9.xyz, r10.xyzx, r3.yyyy
+  add r4.xyz, r4.xyzx, r9.xyzx
+  mul r3.xyz, r8.xyzx, r3.zzzz
+  add r3.xyz, r3.xyzx, r4.xyzx
+  dp3 r0.z, r3.xyzx, r3.xyzx
+  rsq r0.z, r0.z
+  mul r8.xyz, r0.zzzz, r3.xyzx
+
+#line 118
+endif 
+
+#line 120
+itof r3.xyz, l(0, 0, 0, 0)  // r3.x <- diffuse.x; r3.y <- diffuse.y; r3.z <- diffuse.z
+
+#line 121
+itof r4.xyz, l(0, 0, 0, 0)  // r4.x <- specular.x; r4.y <- specular.y; r4.z <- specular.z
+
+#line 123
+mov r9.xyz, -cb1[4].xyzx
+dp3 r0.z, r9.xyzx, r9.xyzx
+rsq r0.z, r0.z
+mul r9.xyz, r0.zzzz, r9.xyzx  // r9.x <- L.x; r9.y <- L.y; r9.z <- L.z
+
+#line 124
+mov r10.xyz, l(1.000000,1.000000,1.000000,0)  // r10.x <- Li.x; r10.y <- Li.y; r10.z <- Li.z
+
+#line 125
+dp3 r0.z, r8.xyzx, r9.xyzx
+max r0.z, r0.z, l(0.000000)  // r0.z <- NoL
+
+#line 126
+dp3 r0.w, r8.xyzx, r7.xyzx
+max r0.w, r0.w, l(0.000000)  // r0.w <- NoV
+
+#line 127
+lt r1.w, l(0.000000), r0.z
+lt r4.w, l(0.000000), r0.w
+or r1.w, r1.w, r4.w
+if_nz r1.w
+
+#line 130
+  add r9.xyz, r7.xyzx, r9.xyzx
+  dp3 r1.w, r9.xyzx, r9.xyzx
+  rsq r1.w, r1.w
+  mul r9.xyz, r1.wwww, r9.xyzx  // r9.x <- H.x; r9.y <- H.y; r9.z <- H.z
+
+#line 131
+  dp3 r1.w, r8.xyzx, r9.xyzx
+  max r1.w, r1.w, l(0.000000)  // r1.w <- NoH
+
+#line 132
+  dp3 r4.w, r9.xyzx, r7.xyzx
+  max r4.w, r4.w, l(0.000000)  // r4.w <- HoV
+
+#line 133
+  mul r7.xyz, r0.zzzz, r10.xyzx
+  nop 
+  mov r8.xyz, r5.xyzx
+  mov r9.xyz, r6.xyzx
+  mov r2.xyz, r2.xyzx
+  mov r4.w, r4.w
+
+#line 28 "C:\Users\2250198\OneDrive - yamaguchigakuen\デスクトップ\x3dgp.00\bidirectional_reflectance_distribution_function.hlsli"
+  mov r5.w, l(3.141593)  // r5.w <- PI
+
+#line 29
+  nop 
+  mov r8.xyz, r8.xyzx
+  mov r9.xyz, r9.xyzx
+  mov r4.w, r4.w
+
+#line 6
+  mov r11.xyz, -r8.xyzx
+  add r9.xyz, r9.xyzx, r11.xyzx
+  mov r6.w, -r4.w
+  add r6.w, r6.w, l(1.000000)
+  max r6.w, r6.w, l(0.000000)
+  min r6.w, r6.w, l(1.000000)
+  mov r7.w, l(1.000000)
+  mul r7.w, r6.w, r7.w
+  mul r6.w, r6.w, r6.w
+  mul r6.w, r6.w, r6.w
+  mul r6.w, r6.w, r7.w
+  mul r9.xyz, r6.wwww, r9.xyzx
+  add r8.xyz, r8.xyzx, r9.xyzx  // r8.x <- <f_schlick return value>.x; r8.y <- <f_schlick return value>.y; r8.z <- <f_schlick return value>.z
+
+#line 29
+  mov r8.xyz, -r8.xyzx
+  add r8.xyz, r8.xyzx, l(1.000000, 1.000000, 1.000000, 0.000000)
+  div r2.xyz, r2.xyzx, r5.wwww
+  mul r2.xyz, r2.xyzx, r8.xyzx  // r2.x <- <brdf_lambertian return value>.x; r2.y <- <brdf_lambertian return value>.y; r2.z <- <brdf_lambertian return value>.z
+
+#line 133 "C:\Users\2250198\OneDrive - yamaguchigakuen\チEクトップ\x3dgp.00\gltf_model_ps.hlsl"
+  mul r2.xyz, r2.xyzx, r7.xyzx
+  add r3.xyz, r2.xyzx, r3.xyzx
+
+#line 134
+  mul r2.xyz, r0.zzzz, r10.xyzx
+  nop 
+  mov r5.xyz, r5.xyzx
+  mov r6.xyz, r6.xyzx
+  mov r0.y, r0.y
+  mov r4.w, r4.w
+  mov r0.z, r0.z
+  mov r0.w, r0.w
+  mov r1.w, r1.w
+
+#line 35 "C:\Users\2250198\OneDrive - yamaguchigakuen\デスクトップ\x3dgp.00\bidirectional_reflectance_distribution_function.hlsli"
+  nop 
+  mov r5.xyz, r5.xyzx
+  mov r6.xyz, r6.xyzx
+  mov r4.w, r4.w
+
+#line 6
+  mov r7.xyz, -r5.xyzx
+  add r6.xyz, r6.xyzx, r7.xyzx
+  mov r4.w, -r4.w
+  add r4.w, r4.w, l(1.000000)
+  max r4.w, r4.w, l(0.000000)
+  min r4.w, r4.w, l(1.000000)
+  mov r5.w, l(1.000000)
+  mul r5.w, r4.w, r5.w
+  mul r4.w, r4.w, r4.w
+  mul r4.w, r4.w, r4.w
+  mul r4.w, r4.w, r5.w
+  mul r6.xyz, r4.wwww, r6.xyzx
+  add r5.xyz, r5.xyzx, r6.xyzx  // r5.x <- <f_schlick return value>.x; r5.y <- <f_schlick return value>.y; r5.z <- <f_schlick return value>.z
+
+#line 35
+  mov r5.xyz, r5.xyzx  // r5.x <- F.x; r5.y <- F.y; r5.z <- F.z
+
+#line 36
+  nop 
+  mov r0.z, r0.z
+  mov r0.w, r0.w
+  mov r0.y, r0.y
+
+#line 11
+  mul r4.w, r0.y, r0.y  // r4.w <- alpha_roughness_sq
+
+#line 12
+  mul r5.w, r0.w, r0.w
+  mov r6.x, -r4.w
+  add r6.x, r6.x, l(1.000000)
+  mul r5.w, r5.w, r6.x
+  add r5.w, r4.w, r5.w
+  sqrt r5.w, r5.w
+  mul r5.w, r0.z, r5.w  // r5.w <- ggxv
+
+#line 13
+  mul r0.z, r0.z, r0.z
+  mov r6.x, -r4.w
+  add r6.x, r6.x, l(1.000000)
+  mul r0.z, r0.z, r6.x
+  add r0.z, r4.w, r0.z
+  sqrt r0.z, r0.z
+  mul r0.z, r0.z, r0.w  // r0.z <- ggxl
+
+#line 14
+  add r0.z, r0.z, r5.w  // r0.z <- ggx
+
+#line 15
+  lt r0.w, l(0.000000), r0.z
+  div r0.z, l(0.500000), r0.z
+  movc r0.z, r0.w, r0.z, l(0)  // r0.z <- <v_ggx return value>
+
+#line 36
+  mov r0.z, r0.z  // r0.z <- Vis
+
+#line 37
+  nop 
+  mov r1.w, r1.w
+  mov r0.y, r0.y
+
+#line 20
+  mov r0.w, l(3.141593)  // r0.w <- PI
+
+#line 21
+  mul r0.y, r0.y, r0.y  // r0.y <- alpha_roughness_sq
+
+#line 22
+  mul r1.w, r1.w, r1.w
+  mov r4.w, l(-1.000000)
+  add r4.w, r0.y, r4.w
+  mul r1.w, r1.w, r4.w
+  add r1.w, r1.w, l(1.000000)  // r1.w <- f
+
+#line 23
+  mul r0.w, r0.w, r1.w
+  mul r0.w, r1.w, r0.w
+  div r0.y, r0.y, r0.w  // r0.y <- <d_ggx return value>
+
+#line 37
+  mov r0.y, r0.y  // r0.y <- D
+
+#line 38
+  mul r5.xyz, r0.zzzz, r5.xyzx
+  mul r0.yzw, r0.yyyy, r5.xxyz  // r0.y <- <brdf_specular_ggx return value>.x; r0.z <- <brdf_specular_ggx return value>.y; r0.w <- <brdf_specular_ggx return value>.z
+
+#line 134 "C:\Users\2250198\OneDrive - yamaguchigakuen\チEクトップ\x3dgp.00\gltf_model_ps.hlsl"
+  mul r0.yzw, r0.yyzw, r2.xxyz
+  add r4.xyz, r0.yzwy, r4.xyzx
+
+#line 135
+endif 
+
+#line 137
+mov r1.xyz, r1.xyzx  // r1.x <- emmisive.x; r1.y <- emmisive.y; r1.z <- emmisive.z
+
+#line 138
+mul r0.yzw, r0.xxxx, r3.xxyz
+mov r2.xyz, -r3.xyzx
+add r0.yzw, r0.yyzw, r2.xxyz
+mul r0.yzw, r0.yyzw, r3.wwww
+add r0.yzw, r0.yyzw, r3.xxyz  // r0.y <- diffuse.x; r0.z <- diffuse.y; r0.w <- diffuse.z
+
+#line 139
+mul r2.xyz, r0.xxxx, r4.xyzx
+mov r3.xyz, -r4.xyzx
+add r2.xyz, r2.xyzx, r3.xyzx
+mul r2.xyz, r2.xyzx, r3.wwww
+add r2.xyz, r2.xyzx, r4.xyzx  // r2.x <- specular.x; r2.y <- specular.y; r2.z <- specular.z
+
+#line 140
+add r0.xyz, r0.yzwy, r2.xyzx
+add r0.xyz, r1.xyzx, r0.xyzx  // r0.x <- Lo.x; r0.y <- Lo.y; r0.z <- Lo.z
+
+#line 141
+mul o0.xyz, r0.xyzx, cb0[4].wwww
 mov o0.w, r2.w
 ret 
-// Approximately 31 instruction slots used
+// Approximately 258 instruction slots used

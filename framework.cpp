@@ -303,7 +303,7 @@ bool framework::initialize()
 	bit_block_transfer = std::make_unique<fullscreen_quad>(device.Get());
 
 	gltf_models[0] = std::make_unique<gltf_model>(device.Get(),
-		"..\\glTF-Sample-Models-master\\2.0\\CesiumMan\\glTF\\CesiumMan.gltf");
+		"..\\glTF-Sample-Models-master\\2.0\\DamagedHelmet\\glTF\\DamagedHelmet.gltf");
 
 	return true;
 }
@@ -446,6 +446,41 @@ void framework::update(float elapsed_time/*Elapsed seconds from last frame*/)
 		ImGui::DragFloat3("gltf_Pos", &gltf_model_position.x, 0.1f);
 		ImGui::DragFloat3("gltf_Rota", &gltf_model_rotation.x, 0.5f, -360.0f, 360.0f);
 		ImGui::SliderFloat3("gltf_Scale", &gltf_model_scale.x, 0.1f, 5.0f);
+	}
+
+	if (gltf_models[0] && !gltf_models[0]->materials.empty() &&
+		ImGui::CollapsingHeader("glTF PBR Material", ImGuiTreeNodeFlags_DefaultOpen))
+	{
+		gltf_model& model{ *gltf_models[0] };
+		ImGui::SliderFloat("Brightness", &model.brightness, 0.0f, 5.0f);
+		static int material_index{ 0 };
+		if (material_index >= static_cast<int>(model.materials.size()))
+		{
+			material_index = 0;
+		}
+		std::vector<const char*> material_names;
+		for (const auto& material : model.materials)
+		{
+			material_names.push_back(material.name.empty() ? "(unnamed)" : material.name.c_str());
+		}
+		ImGui::Combo("Material", &material_index, material_names.data(), static_cast<int>(material_names.size()));
+		auto& data{ model.materials.at(material_index).data };
+		bool changed{ false };
+		changed |= ImGui::ColorEdit3("Base color", data.pbr_metallic_roughness.basecolor_factor);
+		changed |= ImGui::SliderFloat("Metallic", &data.pbr_metallic_roughness.metallic_factor, 0.0f, 1.0f);
+		changed |= ImGui::SliderFloat("Roughness", &data.pbr_metallic_roughness.roughness_factor, 0.05f, 1.0f);
+		changed |= ImGui::SliderFloat("Normal scale", &data.normal_texture.scale, 0.0f, 2.0f);
+		changed |= ImGui::SliderFloat("Occlusion strength", &data.occlusion_texture.strength, 0.0f, 1.0f);
+		changed |= ImGui::DragFloat3("Emissive factor", data.emissive_factor, 0.01f, 0.0f, 5.0f);
+		if (ImGui::Button("Reset material"))
+		{
+			model.reset_material(material_index);
+			changed = true;
+		}
+		if (changed)
+		{
+			model.update_materials(immediate_context.Get());
+		}
 	}
 
 	ImGui::End();
@@ -836,10 +871,13 @@ void framework::render(float elapsed_time/*Elapsed seconds from last frame*/)
 	immediate_context->PSSetSamplers(0, _countof(gltf_samplers), gltf_samplers);
 	static std::vector<gltf_model::node> animated_nodes{ gltf_models[0]->nodes };
 	static float time{ 0 };
-	gltf_models[0]->animate(0, time += elapsed_time, animated_nodes);
-	if (gltf_models[0]->animations.at(0).duration < time)
+	if (!gltf_models[0]->animations.empty())
 	{
-		time = 0;
+		gltf_models[0]->animate(0, time += elapsed_time, animated_nodes);
+		if (gltf_models[0]->animations.at(0).duration < time)
+		{
+			time = 0;
+		}
 	}
 	gltf_models[0]->render(immediate_context.Get(), gltf_world, animated_nodes);
 	// Post-processing needs the original black border instead of repeated UVs.

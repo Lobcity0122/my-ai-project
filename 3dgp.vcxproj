@@ -233,6 +233,7 @@
   <ItemGroup>
     <None Include="fullscreen_quad.hlsli" />
     <None Include="gltf_model.hlsli" />
+    <None Include="bidirectional_reflectance_distribution_function.hlsli" />
     <None Include="geometric_primitive.hlsli" />
     <None Include="skinned_mesh.hlsli" />
     <None Include="sprite.hlsli" />

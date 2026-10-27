@@ -11,7 +11,7 @@
 //   int material;                      // Offset:   64 Size:     4 [unused]
 //   bool has_tangent;                  // Offset:   68 Size:     4 [unused]
 //   int skin;                          // Offset:   72 Size:     4
-//   int pad;                           // Offset:   76 Size:     4 [unused]
+//   float brightness;                  // Offset:   76 Size:     4 [unused]
 //
 // }
 //

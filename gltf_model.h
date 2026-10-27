@@ -173,9 +173,10 @@ public:
         int material{ -1 };
         int has_tangent{ 0 };
         int skin{ -1 };
-        int pad;
+        float brightness{ 1.0f };
     };
     Microsoft::WRL::ComPtr<ID3D11Buffer> primitive_cbuffer;
+    float brightness{ 1.0f };
 
     static const size_t PRIMITIVE_MAX_JOINTS = 512;
     struct primitive_joint_constants
@@ -188,9 +189,14 @@ public:
     void cumulate_transforms(std::vector<node>& nodes);
     void fetch_meshes(ID3D11Device* device, const tinygltf::Model& gltf_model);
     void fetch_materials(ID3D11Device* device, const tinygltf::Model& gltf_model);
+    void update_materials(ID3D11DeviceContext* immediate_context);
+    void reset_material(size_t material_index);
     void fetch_textures(ID3D11Device* device, const tinygltf::Model& gltf_model);
     void fetch_animations(const tinygltf::Model& gltf_model);
     void animate(size_t animation_index, float time, std::vector<node>& animated_nodes);
     void render(ID3D11DeviceContext* immediate_context, const DirectX::XMFLOAT4X4& world,
         const std::vector<node>& animated_nodes);
+
+private:
+    std::vector<material::cbuffer> original_material_data;
 };

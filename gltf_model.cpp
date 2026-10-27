@@ -301,6 +301,7 @@ void gltf_model::fetch_materials(ID3D11Device* device, const tinygltf::Model& gl
     {
         material_data.emplace_back(material.data);
     }
+    original_material_data = material_data;
     HRESULT hr;
     Microsoft::WRL::ComPtr<ID3D11Buffer> material_buffer;
     D3D11_BUFFER_DESC buffer_desc{};
@@ -320,6 +321,28 @@ void gltf_model::fetch_materials(ID3D11Device* device, const tinygltf::Model& gl
     hr = device->CreateShaderResourceView(material_buffer.Get(),
         &shader_resource_view_desc, material_resource_view.GetAddressOf());
     _ASSERT_EXPR(SUCCEEDED(hr), hr_trace(hr));
+}
+
+void gltf_model::update_materials(ID3D11DeviceContext* immediate_context)
+{
+    if (materials.empty() || !material_resource_view)
+    {
+        return;
+    }
+    std::vector<material::cbuffer> material_data;
+    material_data.reserve(materials.size());
+    for (const material& material : materials)
+    {
+        material_data.emplace_back(material.data);
+    }
+    Microsoft::WRL::ComPtr<ID3D11Resource> material_buffer;
+    material_resource_view->GetResource(material_buffer.GetAddressOf());
+    immediate_context->UpdateSubresource(material_buffer.Get(), 0, nullptr, material_data.data(), 0, 0);
+}
+
+void gltf_model::reset_material(size_t material_index)
+{
+    materials.at(material_index).data = original_material_data.at(material_index);
 }
 
 void gltf_model::fetch_textures(ID3D11Device* device, const tinygltf::Model& gltf_model)
@@ -623,6 +646,7 @@ void gltf_model::render(ID3D11DeviceContext* immediate_context, const DirectX::X
                 primitive_data.material = primitive.material;
                 primitive_data.has_tangent = primitive.has("TANGENT");
                 primitive_data.skin = node.skin;
+                primitive_data.brightness = brightness;
                 XMStoreFloat4x4(&primitive_data.world,
                     XMLoadFloat4x4(&node.global_transform) * XMLoadFloat4x4(&world));
                 immediate_context->UpdateSubresource(primitive_cbuffer.Get(), 0, 0, &primitive_data, 0, 0);

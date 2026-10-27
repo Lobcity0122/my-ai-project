@@ -23,7 +23,7 @@ cbuffer PRIMITIVE_CONSTANT_BUFFER : register(b0)
     int material;
     bool has_tangent;
     int skin;
-    int pad;
+    float brightness;
 };
 
 cbuffer SCENE_CONSTANT_BUFFER : register(b1)
