@@ -79,6 +79,23 @@ HRESULT load_texture_from_file(
     return hr;
 }
 
+// メモリ上のDDS・画像データからテクスチャを読み込む
+HRESULT load_texture_from_memory(ID3D11Device* device, const void* data, size_t size,
+    ID3D11ShaderResourceView** shader_resource_view)
+{
+    HRESULT hr{ S_OK };
+    ComPtr<ID3D11Resource> resource;
+    hr = CreateDDSTextureFromMemory(device, reinterpret_cast<const uint8_t*>(data),
+        size, resource.GetAddressOf(), shader_resource_view);
+    if (hr != S_OK)
+    {
+        hr = CreateWICTextureFromMemory(device, reinterpret_cast<const uint8_t*>(data),
+            size, resource.GetAddressOf(), shader_resource_view);
+        _ASSERT_EXPR(SUCCEEDED(hr), hr_trace(hr));
+    }
+    return hr;
+}
+
 // ダミーテスクチャ関数の実装
 HRESULT make_dummy_texture(ID3D11Device* device,
     ID3D11ShaderResourceView** shader_resource_view,

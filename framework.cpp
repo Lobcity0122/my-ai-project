@@ -66,6 +66,19 @@ bool framework::initialize()
 	hr = device->CreateSamplerState(&sampler_desc, sampler_states[2].GetAddressOf());
 	_ASSERT_EXPR(SUCCEEDED(hr), hr_trace(hr));
 
+	// glTF textures can use repeated UVs (DamagedHelmet uses V coordinates above 1).
+	sampler_desc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
+	sampler_desc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
+	sampler_desc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
+	const D3D11_FILTER gltf_filters[]{ D3D11_FILTER_MIN_MAG_MIP_POINT,
+		D3D11_FILTER_MIN_MAG_MIP_LINEAR, D3D11_FILTER_ANISOTROPIC };
+	for (UINT sampler_index = 0; sampler_index < _countof(gltf_filters); ++sampler_index)
+	{
+		sampler_desc.Filter = gltf_filters[sampler_index];
+		hr = device->CreateSamplerState(&sampler_desc, gltf_sampler_states[sampler_index].GetAddressOf());
+		_ASSERT_EXPR(SUCCEEDED(hr), hr_trace(hr));
+	}
+
 	// レンダーターゲットビューの作成
 	ComPtr<ID3D11Texture2D> back_buffer{};
 	hr = swap_chain->GetBuffer(0, __uuidof(ID3D11Texture2D), reinterpret_cast<LPVOID*>(back_buffer.GetAddressOf()));
@@ -290,7 +303,7 @@ bool framework::initialize()
 	bit_block_transfer = std::make_unique<fullscreen_quad>(device.Get());
 
 	gltf_models[0] = std::make_unique<gltf_model>(device.Get(),
-		"..\\glTF-Sample-Models-master\\2.0\\2CylinderEngine\\glTF\\2CylinderEngine.gltf");
+		"..\\glTF-Sample-Models-master\\2.0\\DamagedHelmet\\glTF\\DamagedHelmet.gltf");
 
 	return true;
 }
@@ -806,7 +819,7 @@ void framework::render(float elapsed_time/*Elapsed seconds from last frame*/)
 	);
 #endif
 
-	// glTF is right-handed and Y-up. Use the existing X reflection and model scale.
+	// DamagedHelmet is displayed at its native size, with an X reflection for left-handed rendering.
 	DirectX::XMMATRIX gltf_S{ DirectX::XMMatrixScaling(
 		gltf_model_scale.x, gltf_model_scale.y, gltf_model_scale.z) };
 	DirectX::XMMATRIX gltf_R{ DirectX::XMMatrixRotationRollPitchYaw(
@@ -816,8 +829,14 @@ void framework::render(float elapsed_time/*Elapsed seconds from last frame*/)
 	DirectX::XMMATRIX gltf_T{ DirectX::XMMatrixTranslation(
 		gltf_model_position.x, gltf_model_position.y, gltf_model_position.z) };
 	DirectX::XMFLOAT4X4 gltf_world;
-	DirectX::XMStoreFloat4x4(&gltf_world, C * gltf_S * gltf_R * gltf_T);
+	DirectX::XMStoreFloat4x4(&gltf_world,
+		DirectX::XMMatrixScaling(-1.0f, 1.0f, 1.0f) * gltf_S * gltf_R * gltf_T);
+	ID3D11SamplerState* gltf_samplers[]{ gltf_sampler_states[Sampler_index].Get(),
+		gltf_sampler_states[1].Get(), gltf_sampler_states[Sampler_index].Get() };
+	immediate_context->PSSetSamplers(0, _countof(gltf_samplers), gltf_samplers);
 	gltf_models[0]->render(immediate_context.Get(), gltf_world);
+	// Post-processing needs the original black border instead of repeated UVs.
+	immediate_context->PSSetSamplers(0, _countof(material_samplers), material_samplers);
 
 	framebuffers[0]->deactivate(immediate_context.Get());
 

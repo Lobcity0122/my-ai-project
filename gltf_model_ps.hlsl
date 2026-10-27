@@ -38,11 +38,29 @@ struct material_constants
 };
 StructuredBuffer<material_constants> materials : register(t0);
 
+#define BASECOLOR_TEXTURE 0
+#define METALLIC_ROUGHNESS_TEXTURE 1
+#define NORMAL_TEXTURE 2
+#define EMISSIVE_TEXTURE 3
+#define OCCLUSION_TEXTURE 4
+Texture2D<float4> material_textures[5] : register(t1);
+
+#define POINT 0
+#define LINEAR 1
+#define ANISOTROPIC 2
+SamplerState sampler_states[3] : register(s0);
+
 float4 main(VS_OUT pin) : SV_TARGET
 {
     material_constants m = materials[material];
+    float4 basecolor = m.pbr_metallic_roughness.basecolor_texture.index > -1 ?
+        material_textures[BASECOLOR_TEXTURE].Sample(sampler_states[ANISOTROPIC], pin.texcoord) :
+        m.pbr_metallic_roughness.basecolor_factor;
+    float3 emmisive = m.emissive_texture.index > -1 ?
+        material_textures[EMISSIVE_TEXTURE].Sample(sampler_states[ANISOTROPIC], pin.texcoord).rgb :
+        m.emissive_factor;
     float3 N = normalize(pin.w_normal.xyz);
     float3 L = normalize(-light_direction.xyz);
-    float3 color = max(0, dot(N, L)) * m.pbr_metallic_roughness.basecolor_factor.rgb;
-    return float4(color, 1);
+    float3 color = max(0, dot(N, L)) * basecolor.rgb + emmisive;
+    return float4(color, basecolor.a);
 }

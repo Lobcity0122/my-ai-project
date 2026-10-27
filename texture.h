@@ -12,6 +12,10 @@ HRESULT load_texture_from_file(
 	D3D11_TEXTURE2D_DESC* texture2d_desc
 );
 
+// メモリ上のDDS・画像データからテクスチャを読み込む
+HRESULT load_texture_from_memory(ID3D11Device* device, const void* data, size_t size,
+	ID3D11ShaderResourceView** shader_resource_view);
+
 // テクスチャが存在しない場合の(ダミーテクスチャ関数の作成)
 HRESULT make_dummy_texture(ID3D11Device* device,
 	ID3D11ShaderResourceView** shader_resource_view,

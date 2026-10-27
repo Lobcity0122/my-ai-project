@@ -3,8 +3,10 @@
 #include "tinygltf-release/tiny_gltf.h"
 #include "misc.h"
 #include "shader.h"
+#include "texture.h"
 #include <stack>
 #include <functional>
+#include <filesystem>
 
 bool null_load_image_data(tinygltf::Image*, const int, std::string*, std::string*,
     int, int, const unsigned char*, int, void*)
@@ -40,6 +42,7 @@ gltf_model::gltf_model(ID3D11Device* device, const std::string& filename) : file
     fetch_nodes(gltf_model);
     fetch_meshes(device, gltf_model);
     fetch_materials(device, gltf_model);
+    fetch_textures(device, gltf_model);
 
     D3D11_INPUT_ELEMENT_DESC input_element_desc[]
     {
@@ -311,6 +314,56 @@ void gltf_model::fetch_materials(ID3D11Device* device, const tinygltf::Model& gl
     _ASSERT_EXPR(SUCCEEDED(hr), hr_trace(hr));
 }
 
+void gltf_model::fetch_textures(ID3D11Device* device, const tinygltf::Model& gltf_model)
+{
+    HRESULT hr{ S_OK };
+    for (const tinygltf::Texture& gltf_texture : gltf_model.textures)
+    {
+        texture& texture{ textures.emplace_back() };
+        texture.name = gltf_texture.name;
+        texture.source = gltf_texture.source;
+    }
+    for (const tinygltf::Image& gltf_image : gltf_model.images)
+    {
+        image& image{ images.emplace_back() };
+        image.name = gltf_image.name;
+        image.width = gltf_image.width;
+        image.height = gltf_image.height;
+        image.component = gltf_image.component;
+        image.bits = gltf_image.bits;
+        image.pixel_type = gltf_image.pixel_type;
+        image.buffer_view = gltf_image.bufferView;
+        image.mime_type = gltf_image.mimeType;
+        image.uri = gltf_image.uri;
+        image.as_is = gltf_image.as_is;
+
+        if (gltf_image.bufferView > -1)
+        {
+            const tinygltf::BufferView& buffer_view{ gltf_model.bufferViews.at(gltf_image.bufferView) };
+            const tinygltf::Buffer& buffer{ gltf_model.buffers.at(buffer_view.buffer) };
+            const unsigned char* data = buffer.data.data() + buffer_view.byteOffset;
+            ID3D11ShaderResourceView* texture_resource_view{};
+            hr = load_texture_from_memory(device, data, buffer_view.byteLength, &texture_resource_view);
+            if (hr == S_OK)
+            {
+                texture_resource_views.emplace_back().Attach(texture_resource_view);
+            }
+        }
+        else
+        {
+            const std::filesystem::path path(filename);
+            const std::filesystem::path image_filename = path.parent_path() / gltf_image.uri;
+            ID3D11ShaderResourceView* shader_resource_view{};
+            D3D11_TEXTURE2D_DESC texture2d_desc;
+            hr = load_texture_from_file(device, image_filename.c_str(), &shader_resource_view, &texture2d_desc);
+            if (hr == S_OK)
+            {
+                texture_resource_views.emplace_back().Attach(shader_resource_view);
+            }
+        }
+    }
+}
+
 void gltf_model::render(ID3D11DeviceContext* immediate_context, const DirectX::XMFLOAT4X4& world)
 {
     using namespace DirectX;
@@ -328,6 +381,26 @@ void gltf_model::render(ID3D11DeviceContext* immediate_context, const DirectX::X
             const mesh& mesh{ meshes.at(node.mesh) };
             for (std::vector<mesh::primitive>::const_reference primitive : mesh.primitives)
             {
+                const material& material{ materials.at(primitive.material) };
+                const int texture_indices[]
+                {
+                    material.data.pbr_metallic_roughness.basecolor_texture.index,
+                    material.data.pbr_metallic_roughness.metallic_roughness_texture.index,
+                    material.data.normal_texture.index,
+                    material.data.emissive_texture.index,
+                    material.data.occlusion_texture.index,
+                };
+                ID3D11ShaderResourceView* null_shader_resource_view{};
+                std::vector<ID3D11ShaderResourceView*> shader_resource_views(_countof(texture_indices));
+                for (size_t texture_index = 0; texture_index < shader_resource_views.size(); ++texture_index)
+                {
+                    shader_resource_views.at(texture_index) = texture_indices[texture_index] > -1 ?
+                        texture_resource_views.at(textures.at(texture_indices[texture_index]).source).Get() :
+                        null_shader_resource_view;
+                }
+                immediate_context->PSSetShaderResources(1, static_cast<UINT>(shader_resource_views.size()),
+                    shader_resource_views.data());
+
                 ID3D11Buffer* vertex_buffers[]{
                     primitive.has("POSITION") ? buffers.at(primitive.vertex_buffer_views.at("POSITION").buffer).Get() : NULL,
                     primitive.has("NORMAL") ? buffers.at(primitive.vertex_buffer_views.at("NORMAL").buffer).Get() : NULL,

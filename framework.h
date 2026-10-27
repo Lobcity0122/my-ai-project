@@ -51,6 +51,7 @@ public:
 	ComPtr<ID3D11DepthStencilView> depth_stencil_view;
 
 	ComPtr<ID3D11SamplerState> sampler_states[3];
+	ComPtr<ID3D11SamplerState> gltf_sampler_states[3];
 
 	// オブジェクトの描画順と画面上の前後関係の設定
 	ComPtr<ID3D11DepthStencilState> depth_stencil_states[4];
