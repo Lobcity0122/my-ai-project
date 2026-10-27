@@ -146,6 +146,9 @@
     <None Include="fullscreen_quad.hlsli">
       <Filter>Shaders</Filter>
     </None>
+    <None Include="gltf_model.hlsli">
+      <Filter>Shaders</Filter>
+    </None>
     <None Include="sprite.hlsli">
       <Filter>Shaders</Filter>
     </None>
@@ -161,6 +164,12 @@
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="fullscreen_quad_vs.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="gltf_model_vs.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="gltf_model_ps.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
     <FxCompile Include="fullscreen_quad_ps.hlsl">

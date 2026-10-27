@@ -95,6 +95,9 @@ public:
 	// sknned_mesh *Œ^”z—ñ‚ğ—v‘f”8‚ÅéŒ¾
 	std::unique_ptr<skinned_mesh> skinned_meshes[8];
 	std::unique_ptr<gltf_model> gltf_models[8];
+	DirectX::XMFLOAT3 gltf_model_position{ 0.0f, 0.0f, 0.0f };
+	DirectX::XMFLOAT3 gltf_model_rotation{ 0.0f, 0.0f, 0.0f };
+	DirectX::XMFLOAT3 gltf_model_scale{ 1.0f, 1.0f, 1.0f };
 
 	std::unique_ptr<framebuffer> framebuffers[8];
 

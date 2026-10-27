@@ -232,6 +232,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="fullscreen_quad.hlsli" />
+    <None Include="gltf_model.hlsli" />
     <None Include="geometric_primitive.hlsli" />
     <None Include="skinned_mesh.hlsli" />
     <None Include="sprite.hlsli" />
@@ -241,6 +242,12 @@
     <FxCompile Include="fullscreen_quad_vs.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
+    </FxCompile>
+    <FxCompile Include="gltf_model_vs.hlsl">
+      <ShaderType>Vertex</ShaderType>
+    </FxCompile>
+    <FxCompile Include="gltf_model_ps.hlsl">
+      <ShaderType>Pixel</ShaderType>
     </FxCompile>
     <FxCompile Include="fullscreen_quad_ps.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>

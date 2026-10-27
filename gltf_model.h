@@ -65,7 +65,21 @@ public:
     std::vector<mesh> meshes;
     std::vector<Microsoft::WRL::ComPtr<ID3D11Buffer>> buffers;
 
+    Microsoft::WRL::ComPtr<ID3D11VertexShader> vertex_shader;
+    Microsoft::WRL::ComPtr<ID3D11PixelShader> pixel_shader;
+    Microsoft::WRL::ComPtr<ID3D11InputLayout> input_layout;
+    struct primitive_constants
+    {
+        DirectX::XMFLOAT4X4 world;
+        int material{ -1 };
+        int has_tangent{ 0 };
+        int skin{ -1 };
+        int pad;
+    };
+    Microsoft::WRL::ComPtr<ID3D11Buffer> primitive_cbuffer;
+
     void fetch_nodes(const tinygltf::Model& gltf_model);
     void cumulate_transforms(std::vector<node>& nodes);
     void fetch_meshes(ID3D11Device* device, const tinygltf::Model& gltf_model);
+    void render(ID3D11DeviceContext* immediate_context, const DirectX::XMFLOAT4X4& world);
 };

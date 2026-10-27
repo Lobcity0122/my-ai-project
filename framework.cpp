@@ -428,6 +428,13 @@ void framework::update(float elapsed_time/*Elapsed seconds from last frame*/)
 		ImGui::SliderFloat("animation blend", &animation_blend_factor, 0.0f, 1.0f);
 	}
 	
+	if (ImGui::CollapsingHeader("glTF_model", ImGuiTreeNodeFlags_DefaultOpen))
+	{
+		ImGui::DragFloat3("gltf_Pos", &gltf_model_position.x, 0.1f);
+		ImGui::DragFloat3("gltf_Rota", &gltf_model_rotation.x, 0.5f, -360.0f, 360.0f);
+		ImGui::SliderFloat3("gltf_Scale", &gltf_model_scale.x, 0.1f, 5.0f);
+	}
+
 	ImGui::End();
 #endif
 }
@@ -762,6 +769,8 @@ void framework::render(float elapsed_time/*Elapsed seconds from last frame*/)
 	immediate_context->RSSetState(rasterizer_states[0].Get());
 	#endif
 
+	// UNIT34: keep the previous FBX animation test disabled while testing glTF.
+#if 0
 	// skinned_meshクラスのrenderメンバ関数を呼び出す
 #if 1
 	int clip_index{ 0 };
@@ -795,6 +804,20 @@ void framework::render(float elapsed_time/*Elapsed seconds from last frame*/)
 		{ skinned_mesh_color[0], skinned_mesh_color[1], skinned_mesh_color[2], skinned_mesh_color[3] },
 		&keyframe
 	);
+#endif
+
+	// glTF is right-handed and Y-up. Use the existing X reflection and model scale.
+	DirectX::XMMATRIX gltf_S{ DirectX::XMMatrixScaling(
+		gltf_model_scale.x, gltf_model_scale.y, gltf_model_scale.z) };
+	DirectX::XMMATRIX gltf_R{ DirectX::XMMatrixRotationRollPitchYaw(
+		DirectX::XMConvertToRadians(gltf_model_rotation.x),
+		DirectX::XMConvertToRadians(gltf_model_rotation.y),
+		DirectX::XMConvertToRadians(gltf_model_rotation.z)) };
+	DirectX::XMMATRIX gltf_T{ DirectX::XMMatrixTranslation(
+		gltf_model_position.x, gltf_model_position.y, gltf_model_position.z) };
+	DirectX::XMFLOAT4X4 gltf_world;
+	DirectX::XMStoreFloat4x4(&gltf_world, C * gltf_S * gltf_R * gltf_T);
+	gltf_models[0]->render(immediate_context.Get(), gltf_world);
 
 	framebuffers[0]->deactivate(immediate_context.Get());
 
