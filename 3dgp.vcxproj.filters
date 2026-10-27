@@ -25,6 +25,9 @@
     <ClCompile Include="framework.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
+    <ClCompile Include="gltf_model.cpp">
+      <Filter>Sources</Filter>
+    </ClCompile>
     <ClCompile Include="main.cpp">
       <Filter>Sources</Filter>
     </ClCompile>
@@ -82,6 +85,9 @@
       <Filter>Headers</Filter>
     </ClInclude>
     <ClInclude Include="framework.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="gltf_model.h">
       <Filter>Headers</Filter>
     </ClInclude>
     <ClInclude Include="high_resolution_timer.h">

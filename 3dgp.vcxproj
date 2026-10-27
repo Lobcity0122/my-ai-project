@@ -199,6 +199,7 @@
     <ClCompile Include="framebuffer.cpp" />
     <ClCompile Include="fullscreen_quad.cpp" />
     <ClCompile Include="framework.cpp" />
+    <ClCompile Include="gltf_model.cpp" />
     <ClCompile Include="shader.cpp" />
     <ClCompile Include="skinned_mesh.cpp" />
     <ClCompile Include="sprite.cpp" />
@@ -210,6 +211,7 @@
     <ClInclude Include="framebuffer.h" />
     <ClInclude Include="fullscreen_quad.h" />
     <ClInclude Include="framework.h" />
+    <ClInclude Include="gltf_model.h" />
     <ClInclude Include="geometric_primitive.h" />
     <ClInclude Include="high_resolution_timer.h" />
     <ClInclude Include="imgui\imconfig.h" />

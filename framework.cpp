@@ -289,6 +289,9 @@ bool framework::initialize()
 	framebuffers[1] = std::make_unique<framebuffer>(device.Get(), 1280 / 2, 720 / 2);
 	bit_block_transfer = std::make_unique<fullscreen_quad>(device.Get());
 
+	gltf_models[0] = std::make_unique<gltf_model>(device.Get(),
+		"..\\glTF-Sample-Models-master\\2.0\\2CylinderEngine\\glTF\\2CylinderEngine.gltf");
+
 	return true;
 }
 

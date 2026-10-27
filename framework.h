@@ -32,6 +32,7 @@ using namespace ImGui;
 #include "skinned_mesh.h"
 #include "framebuffer.h"
 #include "fullscreen_quad.h"
+#include "gltf_model.h"
 
 #define SCREEN_WIDTH 1280
 #define SCREEN_HEIGHT 720
@@ -93,6 +94,7 @@ public:
 
 	// sknned_mesh *Œ^”z—ñ‚ğ—v‘f”8‚ÅéŒ¾
 	std::unique_ptr<skinned_mesh> skinned_meshes[8];
+	std::unique_ptr<gltf_model> gltf_models[8];
 
 	std::unique_ptr<framebuffer> framebuffers[8];
 
