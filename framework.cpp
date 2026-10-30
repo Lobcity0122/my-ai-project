@@ -1,5 +1,6 @@
 ﻿#include "framework.h"
 #include "shader.h"
+#include "texture.h"
 
 using namespace DirectX;
 
@@ -304,6 +305,15 @@ bool framework::initialize()
 
 	gltf_models[0] = std::make_unique<gltf_model>(device.Get(),
 		"..\\glTF-Sample-Models-master\\2.0\\DamagedHelmet\\glTF\\DamagedHelmet.gltf");
+	
+	load_texture_from_file(device.Get(), L"../environments/sunset_jhbcentral_4k/sunset_jhbcentral_4k.dds",
+		shader_resource_views[0].GetAddressOf(), &texture2d_desc);
+	load_texture_from_file(device.Get(), L"../environments/sunset_jhbcentral_4k/diffuse_iem.dds",
+		shader_resource_views[1].GetAddressOf(), &texture2d_desc);
+	load_texture_from_file(device.Get(), L"../environments/sunset_jhbcentral_4k/specular_pmrem.dds",
+		shader_resource_views[2].GetAddressOf(), &texture2d_desc);
+	load_texture_from_file(device.Get(), L"../environments/lut_ggx.dds",
+		shader_resource_views[3].GetAddressOf(), &texture2d_desc);
 
 	return true;
 }
@@ -879,6 +889,10 @@ void framework::render(float elapsed_time/*Elapsed seconds from last frame*/)
 			time = 0;
 		}
 	}
+	immediate_context->PSSetShaderResources(32, 1, shader_resource_views[0].GetAddressOf());
+	immediate_context->PSSetShaderResources(33, 1, shader_resource_views[1].GetAddressOf());
+	immediate_context->PSSetShaderResources(34, 1, shader_resource_views[2].GetAddressOf());
+	immediate_context->PSSetShaderResources(35, 1, shader_resource_views[3].GetAddressOf());
 	gltf_models[0]->render(immediate_context.Get(), gltf_world, animated_nodes);
 	// Post-processing needs the original black border instead of repeated UVs.
 	immediate_context->PSSetSamplers(0, _countof(material_samplers), material_samplers);

@@ -152,6 +152,9 @@
     <None Include="bidirectional_reflectance_distribution_function.hlsli">
       <Filter>Shaders</Filter>
     </None>
+    <None Include="image_based_lighting.hlsli">
+      <Filter>Shaders</Filter>
+    </None>
     <None Include="sprite.hlsli">
       <Filter>Shaders</Filter>
     </None>

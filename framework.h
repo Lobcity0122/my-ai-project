@@ -63,6 +63,7 @@ public:
 	ComPtr<ID3D11PixelShader> replaced_pixel_shaders[8];
 
 	Microsoft::WRL::ComPtr<ID3D11PixelShader> pixel_shaders[8];
+	Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> shader_resource_views[8];
 
 	unique_ptr<sprite> sprites[8];
 	unique_ptr<sprite_batch> sprite_batches[8];

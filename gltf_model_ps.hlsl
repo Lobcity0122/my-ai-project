@@ -134,6 +134,9 @@ float4 main(VS_OUT pin) : SV_TARGET
         specular += Li * NoL * brdf_specular_ggx(f0, f90, alpha_roughness, HoV, NoL, NoV, NoH);
     }
 
+    diffuse += ibl_radiance_lambertian(N, V, roughness_factor, c_diff, f0);
+    specular += ibl_radiance_ggx(N, V, roughness_factor, f0);
+
     float3 emmisive = emmisive_factor;
     diffuse = lerp(diffuse, diffuse * occlusion_factor, occlusion_strength);
     specular = lerp(specular, specular * occlusion_factor, occlusion_strength);
