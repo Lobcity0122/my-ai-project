@@ -308,11 +308,18 @@ bool framework::initialize()
 	
 	load_texture_from_file(device.Get(), L"../environments/sunset_jhbcentral_4k/sunset_jhbcentral_4k.dds",
 		shader_resource_views[0].GetAddressOf(), &texture2d_desc);
-	load_texture_from_file(device.Get(), L"../environments/sunset_jhbcentral_4k/diffuse_iem.dds",
+	/*load_texture_from_file(device.Get(), L"../environments/sunset_jhbcentral_4k/diffuse_iem.dds",
 		shader_resource_views[1].GetAddressOf(), &texture2d_desc);
 	load_texture_from_file(device.Get(), L"../environments/sunset_jhbcentral_4k/specular_pmrem.dds",
 		shader_resource_views[2].GetAddressOf(), &texture2d_desc);
 	load_texture_from_file(device.Get(), L"../environments/lut_ggx.dds",
+		shader_resource_views[3].GetAddressOf(), &texture2d_desc);*/
+	
+	load_texture_from_file(device.Get(), L"./resources/ibl_custom/diffuse_iem.dds",
+		shader_resource_views[1].GetAddressOf(), &texture2d_desc);
+	load_texture_from_file(device.Get(), L"./resources/ibl_custom/specular_pmrem.dds",
+		shader_resource_views[2].GetAddressOf(), &texture2d_desc);
+	load_texture_from_file(device.Get(), L"./resources/ibl_custom/lut_ggx.dds",
 		shader_resource_views[3].GetAddressOf(), &texture2d_desc);
 
 	return true;
